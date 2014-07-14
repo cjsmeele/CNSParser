@@ -40,6 +40,8 @@ class ModelGenerator(object):
         # Maps regular expressions to handler functions.
         # Capture groups are always named using the (?P<name>) syntax.
         # They can be retrieved by the handler using the match.group('name') function.
+        # TODO: Extend the wrapper around these handlers to provide them with
+        #       simple named arguments instead of passing a Match object.
         self.pattern_handlers = [
             (
                 # Match '{!accesslevel easy "Easy" }'
@@ -59,6 +61,9 @@ class ModelGenerator(object):
                 r'\{\+\s*(?P<key>[^:]+)\s*:\s*(?P<value>.+)\s*\+}',
                 self.handle_metadata
             ),
+            # TODO: Match blocks and handle repetitions
+            # TODO: Blocks should take the top level in the parameters list
+            #       instead of the parameters themselves
         ]
 
     def handle_accesslevel(self, match):
@@ -118,7 +123,6 @@ class ModelGenerator(object):
         else:
             self.current_paragraph = match.group('text')
 
-
     def parse(self):
         self.current_metadata  = {}
         self.current_paragraph = {}
@@ -150,6 +154,7 @@ if __name__ == '__main__':
     When run as a program, this module will try to use a run.cns in the current
     working directory and output the model description to stdout in yaml format.
     """
+    # TODO: Use stdin instead and accept a filename parameter
     with open('run.cns', 'r') as cnsfile:
         model_generator = ModelGenerator(cnsfile)
         accesslevels, parameters = model_generator.parse()
