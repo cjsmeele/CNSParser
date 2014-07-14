@@ -36,7 +36,6 @@ class ModelGenerator(object):
         self.source       = source
         self.accesslevels = []
         self.parameters   = []
-        self.state        = None
 
         # Maps regular expressions to handler functions.
         # Capture groups are always named using the (?P<name>) syntax.
@@ -95,6 +94,12 @@ class ModelGenerator(object):
             # No access level was specified, default to the lowest level, which should be 'easy'
             self.current_metadata['level'] = self.accesslevels[0]['name']
 
+        if len(self.current_paragraph):
+            self.current_metadata['label'] = self.current_paragraph
+            self.current_paragraph = ""
+        else:
+            print('Warning: Parameter "' + self.current_metadata['name'] + '" is not labeled', file=sys.stderr)
+
         self.parameters.append(self.current_metadata)
         self.current_metadata = {}
 
@@ -108,15 +113,21 @@ class ModelGenerator(object):
             print('Warning: Unknown metadata key "' + match.group('key') + '"', file=sys.stderr)
 
     def handle_paragraph(self, match):
-        # TODO
-        pass
+        if len(self.current_paragraph):
+            self.current_paragraph += '\n' + match.group('text')
+        else:
+            self.current_paragraph = match.group('text')
+
 
     def parse(self):
-        self.current_metadata = {}
+        self.current_metadata  = {}
+        self.current_paragraph = {}
 
         for line in self.source:
             line = line.rstrip()
             if not len(line):
+                # TODO: Store the current paragraph somewhere instead of discarding it
+                self.current_paragraph = ""
                 continue
             for pattern, function in self.pattern_handlers:
                 match = re.search(pattern, line)
@@ -128,7 +139,6 @@ class ModelGenerator(object):
                     break
             if not match:
                 print('Warning: Could not parse line "' + line + '"', file=sys.stderr)
-                pass
 
         # Clean up
         del self.current_metadata
