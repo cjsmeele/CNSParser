@@ -39,9 +39,8 @@ class ModelGenerator(object):
 
         # Maps regular expressions to handler functions.
         # Capture groups are always named using the (?P<name>) syntax.
-        # They can be retrieved by the handler using the match.group('name') function.
-        # TODO: Extend the wrapper around these handlers to provide them with
-        #       simple named arguments instead of passing a Match object.
+        # They can be retrieved by the handler in the args argument, which is
+        # a dictionary.
         self.pattern_handlers = [
             (
                 # Match '{!accesslevel easy "Easy" }'
@@ -58,7 +57,7 @@ class ModelGenerator(object):
             ), (
                 # Match '{+ choice: protein nucleic carbohydrate ligand +}'
                 # Note: Values should not be quoted here
-                r'\{\+\s*(?P<key>[^:]+)\s*:\s*(?P<value>.+)\s*\+}',
+                r'\{\+\s*(?P<key>[^:]+?)\s*:\s*(?P<value>.+?)\s*\+}',
                 self.handle_metadata
             ),
             # TODO: Match blocks and handle repetitions
@@ -66,24 +65,24 @@ class ModelGenerator(object):
             #       instead of the parameters themselves
         ]
 
-    def handle_accesslevel(self, match):
+    def handle_accesslevel(self, args):
         """\
         Add an access level.
         Access levels must be specified in order from easiest to most complex.
         """
         self.accesslevels.append({
-            'name':  match.group('name'),
-            'label': match.group('label'),
+            'name':  args['name'],
+            'label': args['label'],
         })
 
-    def handle_parameter(self, match):
+    def handle_parameter(self, args):
         """\
         Insert a new parameter into the parameter list, using all applicable
         metadata specified since the last parameter.
         """
         self.current_metadata.update({
-            'name':    match.group('name'),
-            'default': match.group('value'),
+            'name':    args['name'],
+            'default': args['value'],
         })
 
         if not 'type' in self.current_metadata:
@@ -108,20 +107,20 @@ class ModelGenerator(object):
         self.parameters.append(self.current_metadata)
         self.current_metadata = {}
 
-    def handle_metadata(self, match):
-        if match.group('key') == 'choice':
+    def handle_metadata(self, args):
+        if args['key'] == 'choice':
             self.current_metadata.update({
                 'type':    'choice',
-                'options': match.group('value').split(),
+                'options': args['value'].split(),
             })
         else:
-            print('Warning: Unknown metadata key "' + match.group('key') + '"', file=sys.stderr)
+            print('Warning: Unknown metadata key "' + args['key'] + '"', file=sys.stderr)
 
-    def handle_paragraph(self, match):
+    def handle_paragraph(self, args):
         if len(self.current_paragraph):
-            self.current_paragraph += '\n' + match.group('text')
+            self.current_paragraph += '\n' + args['text']
         else:
-            self.current_paragraph = match.group('text')
+            self.current_paragraph = args['text']
 
     def parse(self):
         self.current_metadata  = {}
@@ -138,8 +137,9 @@ class ModelGenerator(object):
                 if match:
                     #print('\n' + '-'*80, file=sys.stderr)
                     #print(line, file=sys.stderr)
-                    #print(match.groupdict(), file=sys.stderr)
-                    function(match)
+                    args = dict((key, value) for (key, value) in match.groupdict().iteritems() if not re.match('^quote\d+$', key))
+                    #print(args, file=sys.stderr)
+                    function(args)
                     break
             if not match:
                 print('Warning: Could not parse line "' + line + '"', file=sys.stderr)
