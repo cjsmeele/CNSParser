@@ -81,11 +81,19 @@ class ModelGenerator(object):
             else:
                 print('Warning:', text, file=sys.stderr)
 
+    def printv(self, text):
+        """\
+        Print a message if verbose mode is turned on.
+        """
+        if self.verbose:
+            print(text, file=sys.stderr)
+
     def handle_accesslevel(self, args):
         """\
         Add an access level.
         Access levels must be specified in order from easiest to most complex.
         """
+        self.printv('Added accesslevel \'' + args['name'] + '\', labeled \'' + args['label'] + '\'')
         self.accesslevels.append({
             'name':  args['name'],
             'label': args['label'],
@@ -120,6 +128,12 @@ class ModelGenerator(object):
         else:
             self.warn('Parameter "' + self.current_metadata['name'] + '" is not labeled')
 
+        self.printv(
+            'Added parameter \'' + self.current_metadata['name'] + '\''
+            + ' type = '      + self.current_metadata['type']
+            + ' default = \'' + self.current_metadata['default'] + '\''
+        )
+
         self.components.append(self.current_metadata)
         self.current_metadata = {}
 
@@ -129,13 +143,16 @@ class ModelGenerator(object):
                 'type':    'choice',
                 'options': args['value'].split(),
             })
+            self.printv('Saving metadata for next parameter: type = choice, options = \'' + args['value'] + '\'')
         else:
             self.warn('Unknown metadata key "' + args['key'] + '"')
 
     def handle_paragraph(self, args):
         if len(self.current_paragraph):
+            self.printv('Appending to current paragraph: \'' + args['text'] + '\'')
             self.current_paragraph += '\n' + args['text']
         else:
+            self.printv('Creating paragraph or label: \'' + args['text'] + '\'')
             self.current_paragraph = args['text']
 
     def parse(self):
@@ -146,7 +163,9 @@ class ModelGenerator(object):
             line = line.rstrip()
             if not len(line):
                 # TODO: Store the current paragraph somewhere instead of discarding it
-                self.current_paragraph = ""
+                if len(self.current_paragraph):
+                    self.warn('Discarding current paragraph')
+                    self.current_paragraph = ""
                 continue
             for pattern, function in self.pattern_handlers:
                 match = re.search(pattern, line)
