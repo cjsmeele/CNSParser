@@ -2,6 +2,7 @@
 
 from __future__ import print_function
 import sys
+import argparse
 import re
 import yaml
 
@@ -29,13 +30,16 @@ class ModelGenerator(object):
             + r'(?(' + quote_name + r')(?P=' + quote_name + r')|)\s*' # Closing quote
         )
 
-    def __init__(self, source):
+    def __init__(self, source=sys.stdin, verbose=False, warnings=False, fatal_warnings=False):
         """\
         source must be iteratable, contents are parsed line-by-line
         """
-        self.source       = source
-        self.accesslevels = []
-        self.parameters   = []
+        self.verbose        = verbose
+        self.warnings       = warnings or fatal_warnings
+        self.fatal_warnings = fatal_warnings
+        self.source         = source
+        self.accesslevels   = []
+        self.components     = []
 
         # Maps regular expressions to handler functions.
         # Capture groups are always named using the (?P<name>) syntax.
@@ -61,9 +65,21 @@ class ModelGenerator(object):
                 self.handle_metadata
             ),
             # TODO: Match blocks and handle repetitions
-            # TODO: Blocks should take the top level in the parameters list
-            #       instead of the parameters themselves
+            # TODO: Blocks should take the top level in the components list
+            #       instead of the components themselves
         ]
+
+    def warn(self, text):
+        """\
+        Print a warning if warnings are turned on.
+        Exits with a non-zero value if fatal warnings are turned on.
+        """
+        if self.warnings:
+            if self.fatal_warnings:
+                print('Error:', text, file=sys.stderr)
+                exit(1)
+            else:
+                print('Warning:', text, file=sys.stderr)
 
     def handle_accesslevel(self, args):
         """\
@@ -102,9 +118,9 @@ class ModelGenerator(object):
             self.current_metadata['label'] = self.current_paragraph
             self.current_paragraph = ""
         else:
-            print('Warning: Parameter "' + self.current_metadata['name'] + '" is not labeled', file=sys.stderr)
+            self.warn('Parameter "' + self.current_metadata['name'] + '" is not labeled')
 
-        self.parameters.append(self.current_metadata)
+        self.components.append(self.current_metadata)
         self.current_metadata = {}
 
     def handle_metadata(self, args):
@@ -114,7 +130,7 @@ class ModelGenerator(object):
                 'options': args['value'].split(),
             })
         else:
-            print('Warning: Unknown metadata key "' + args['key'] + '"', file=sys.stderr)
+            self.warn('Unknown metadata key "' + args['key'] + '"')
 
     def handle_paragraph(self, args):
         if len(self.current_paragraph):
@@ -137,27 +153,82 @@ class ModelGenerator(object):
                 if match:
                     #print('\n' + '-'*80, file=sys.stderr)
                     #print(line, file=sys.stderr)
-                    args = dict((key, value) for (key, value) in match.groupdict().iteritems() if not re.match('^quote\d+$', key))
+
+                    # Create an args dictionary based on named capture groups
+                    # in the regex match. Filter out quote captures.
+                    args = dict(
+                        (key, value) for (key, value) in match.groupdict().iteritems()
+                            if not re.match('^quote\d+$', key)
+                    )
                     #print(args, file=sys.stderr)
                     function(args)
                     break
             if not match:
-                print('Warning: Could not parse line "' + line + '"', file=sys.stderr)
+                self.warn('Could not parse line "' + line + '"')
 
         # Clean up
         del self.current_metadata
+        del self.current_paragraph
 
-        return self.accesslevels, self.parameters
+        return self.accesslevels, self.components
 
 if __name__ == '__main__':
     """\
     When run as a program, this module will try to use a run.cns in the current
     working directory and output the model description to stdout in yaml format.
     """
-    # TODO: Use stdin instead and accept a filename parameter
-    with open('run.cns', 'r') as cnsfile:
-        model_generator = ModelGenerator(cnsfile)
-        accesslevels, parameters = model_generator.parse()
 
-        print(yaml.dump_all([accesslevels, parameters],
-            explicit_start=True, default_flow_style=False))
+    parser = argparse.ArgumentParser(description='Convert a run.cns file to a generic YAML model description')
+
+    parser.add_argument(
+        '-V', '--version',
+        action  = 'version',
+        version = '%(prog)s 0.1'
+    )
+    parser.add_argument(
+        '-v', '--verbose',
+        dest    = 'verbose',
+        action  = 'store_true',
+        default = False,
+        help    = 'print parsing information to stderr'
+    )
+    parser.add_argument(
+        '-w', '--warnings',
+        dest    = 'warnings',
+        action  = 'store_true',
+        default = False,
+        help    = 'show warnings for unrecognized input data'
+    )
+    parser.add_argument(
+        '-W', '--fatal-warnings',
+        dest    = 'fatal_warnings',
+        action  = 'store_true',
+        default = False,
+        help    = 'make unrecognized input data throw a fatal error, implicitly sets -w'
+    )
+    parser.add_argument(
+        'source', metavar='INPUT',
+        type    = argparse.FileType('r'),
+        default = sys.stdin,
+        nargs   = '?',
+        help    = 'the run.cns file to parse, defaults to \'-\' for stdin'
+    )
+    parser.add_argument(
+        '-o', '--output', metavar='OUTPUT',
+        dest    = 'destination',
+        type    = argparse.FileType('w'),
+        default = sys.stdout,
+        help    = 'the output YAML file, defualts to \'-\' for stdout'
+    )
+
+    args = parser.parse_args()
+
+    # Pass arguments as an unpacked dictionary to the ModelGenerator constructor
+    model_generator = ModelGenerator(**dict(
+        (key, value) for (key, value) in vars(args).iteritems()
+            if key not in set(['destination'])
+    ))
+    accesslevels, components = model_generator.parse()
+
+    print(yaml.dump_all([accesslevels, components],
+        explicit_start=True, default_flow_style=False), file=args.destination)
