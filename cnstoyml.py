@@ -36,6 +36,13 @@ parser.add_argument(
     help    = 'make unrecognized input data throw a fatal error, implicitly sets -w'
 )
 parser.add_argument(
+    '-c', '--compact',
+    dest    = 'tidy',
+    action  = 'store_false',
+    default = True,
+    help    = 'do NOT default to the more readable YAML block syntax'
+)
+parser.add_argument(
     'source', metavar='INPUT',
     type    = argparse.FileType('r'),
     default = sys.stdin,
@@ -55,9 +62,10 @@ args = parser.parse_args()
 # Pass arguments as an unpacked dictionary to the CNSParser constructor
 parser = CNSParser(**dict(
     (key, value) for (key, value) in vars(args).iteritems()
-        if key not in set(['destination'])
+        # Filter out arguments used only by this program
+        if key not in set(['destination', 'tidy'])
 ))
 accesslevels, components = parser.parse()
 
 print(yaml.dump_all([accesslevels, components],
-    explicit_start=True, default_flow_style=False), file=args.destination)
+    explicit_start=True, default_flow_style=(not args.tidy)), file=args.destination)
