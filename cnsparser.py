@@ -169,7 +169,7 @@ class CNSParser(object):
     def handle_paragraph(self, args):
         if len(self.current_paragraph):
             self.printv('Appending to current paragraph: \'' + args['text'] + '\'')
-            self.current_paragraph += args['text']
+            self.current_paragraph += '\n' + args['text']
         else:
             self.printv('Creating paragraph or label: \'' + args['text'] + '\'')
             self.current_paragraph = args['text']
@@ -215,6 +215,9 @@ class CNSParser(object):
                     break
             if not match:
                 self.warn('Could not parse line "' + line + '"')
+                # Assume that the current paragraph (on the line before this
+                # one) has something to do with this unparsable line, drop it.
+                self.current_paragraph = ""
 
         # Clean up
         del self.current_metadata
