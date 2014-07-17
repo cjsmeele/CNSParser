@@ -34,7 +34,8 @@ parser_patterns = {
 
     # Match '{===>} prot_coor_A="/a/random/path/prot.pdb";'
     # Note: Values may be quoted
-    'parameter': r'\{===>}\s*' + re_string('name') + r'\s*=\s*' + re_string('value') + r'\s*;',
+    'parameter': r'\{===>}\s*' + re_string('name') + r'\s*=\s*' + re_string('value') + r'\s*;'
+                 r'\s*(!#level\s*=\s*' + re_string('accesslevel') + r')?',
 
     # Match '{* Molecular Type *}'
     'paragraph': r'\{\*\s*(?P<text>.*?)\s*\*}',
@@ -165,11 +166,13 @@ class CNSParser(object):
         Add an access level.
         Access levels must be specified in order from easiest to most complex.
         """
-        self.printv('Added accesslevel \'' + args['name'] + '\', labeled \'' + args['label'] + '\'')
         self.accesslevels.append({
             'name':  args['name'],
             'label': args['label'],
         })
+        self.accesslevel_names.append(args['name'])
+
+        self.printv('Added accesslevel \'' + args['name'] + '\', labeled \'' + args['label'] + '\'')
 
     def handle_parameter(self, args):
         """\
@@ -192,14 +195,18 @@ class CNSParser(object):
             else:
                 self.current_metadata['datatype'] = 'text'
 
-        if 'level' not in self.current_metadata:
-            # No access level was specified, default to the lowest level, which should be 'easy'
+        if 'accesslevel' in args and args['accesslevel'] is not None:
+            if args['accesslevel'] not in self.accesslevel_names:
+                self.error('Specified access level \'' + args['accesslevel'] + '\' does not exist')
+            self.current_metadata['accesslevel'] = args['accesslevel']
+        else:
+            # No access level was specified, default to the highest level
             if not len(self.accesslevels):
                 self.error(
                     'No access levels specified before the first parameter '
                     '\'' + self.current_metadata['name'] + '\''
                 )
-            self.current_metadata['level'] = self.accesslevels[0]['name']
+            self.current_metadata['accesslevel'] = self.accesslevels[-1]['name']
 
         if len(self.current_paragraph):
             self.current_metadata['label'] = self.current_paragraph
@@ -247,6 +254,7 @@ class CNSParser(object):
         self.current_metadata  = {} # Data type, etc.
         self.current_paragraph = {} # Documentation or parameter labels
         self.current_blocks    = [] # Contains pointers to actual block components, used for switching between levels
+        self.accesslevel_names = [] # Used for inexpensive parameter access level validation
 
         for line in self.source:
             line = line.rstrip()
@@ -279,6 +287,7 @@ class CNSParser(object):
                 self.current_paragraph = ""
 
         # Clean up
+        del self.accesslevel_names
         del self.current_blocks
         del self.current_paragraph
         del self.current_metadata
