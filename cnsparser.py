@@ -37,6 +37,10 @@ parser_patterns = {
     'parameter': r'\{===>}\s*' + re_string('name') + r'\s*=\s*' + re_string('value') + r'\s*;'
                  r'\s*(!#level\s*=\s*' + re_string('accesslevel') + r')?',
 
+    # Match 'numhis=5;'
+    # These parameters are not saved to the model
+    'static_parameter': r'^\s*' + re_string('name') + r'\s*=\s*' + re_string('value') + r'\s*;',
+
     # Match '{* Molecular Type *}'
     'paragraph': r'\{\*\s*(?P<text>.*?)\s*\*}',
 
@@ -86,6 +90,9 @@ class CNSParser(object):
             ), (
                 parser_patterns['parameter'],
                 self.handle_parameter
+            ), (
+                parser_patterns['static_parameter'],
+                None
             ), (
                 parser_patterns['paragraph'],
                 self.handle_paragraph
