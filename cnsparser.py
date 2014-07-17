@@ -29,11 +29,11 @@ def re_string(name, quote_id=[0]):
 # Capture groups must be named using the (?P<name>) syntax.
 parser_patterns = {
     # Match '{!accesslevel easy "Easy" }'
-    # Note: Values may be quoted
+    # Note: Values may be quoted.
     'accesslevel': r'\{!accesslevel\s+' + re_string('name') + r'\s+' + re_string('label') + r'\s*\}',
 
     # Match '{===>} prot_coor_A="/a/random/path/prot.pdb";'
-    # Note: Values may be quoted
+    # Note: Values may be quoted.
     'parameter': r'\{===>}\s*' + re_string('name') + r'\s*=\s*' + re_string('value') + r'\s*;'
                  r'\s*(!#level\s*=\s*' + re_string('accesslevel') + r')?',
 
@@ -44,8 +44,16 @@ parser_patterns = {
     'metadata': r'\{\+\s*(?P<key>[^:]+?)\s*:\s*(?P<value>.+?)\s*\+}',
 
     # Match '{== Molecular Definition ($segid) ==}'
-    # Note: The amount of equals signs signify depth, allowing for nested blocks
+    # Note: The amount of equals signs signify depth, allowing for nested blocks.
     'blockstart': r'\{(?P<indentation>={2,})\s*(?P<head>.*?)\s*={2,}\}',
+
+    # Match '! This is a comment'
+    'linecomment': r'^\s*!\s*(?P<text>.*?)\s*$',
+
+    # Match '{ This is a comment }'
+    # Note: This parser does not support multiline block comments.
+    #       Also, block comments may not contain closing braces.
+    'blockcomment': r'\{\s*(?P<text>[^}]*?)\s*\}',
 }
 
 class CNSParser(object):
@@ -65,6 +73,10 @@ class CNSParser(object):
         # The contents of named capture groups can be retrieved by the handler
         # in the args argument, which is a dictionary.
         #
+        # Note that the order of these patterns matters:
+        # Patterns are checked in the order they are specified, and when lines
+        # match multiple patterns, only the first match counts.
+        #
         # To extend the parser without changing the original, subclass CNSParser
         # and add or replace pattern handlers in your __init__ function.
         self.pattern_handlers = [
@@ -83,6 +95,13 @@ class CNSParser(object):
             ), (
                 parser_patterns['blockstart'],
                 self.handle_head
+            ), (
+                # Regular comments must be recognized to avoid warnings.
+                parser_patterns['linecomment'],
+                None
+            ), (
+                parser_patterns['blockcomment'],
+                None
             ),
         ]
 
@@ -230,6 +249,8 @@ class CNSParser(object):
                 'options':  args['value'].split(),
             })
             self.printv('Saving metadata for next parameter: datatype = choice, options = \'' + args['value'] + '\'')
+        elif args['key'] == 'table':
+            self.warn('Tables are not supported')
         else:
             self.warn('Unknown metadata key "' + args['key'] + '"')
 
@@ -269,16 +290,17 @@ class CNSParser(object):
             for pattern, function in self.pattern_handlers:
                 match = re.search(pattern, line)
                 if match:
-                    #print('\n' + '-'*80, file=sys.stderr)
-                    #print(line, file=sys.stderr)
+                    if function is not None:
+                        #print('\n' + '-'*80, file=sys.stderr)
+                        #print(line, file=sys.stderr)
 
-                    # Create an args dictionary based on named capture groups
-                    # in the regex match. Filter out quote captures.
-                    args = dict(
-                        (key, value) for (key, value) in match.groupdict().iteritems()
-                            if not re.match('^quote\d+$', key)
-                    )
-                    function(args)
+                        # Create an args dictionary based on named capture groups
+                        # in the regex match. Filter out quote captures.
+                        args = dict(
+                            (key, value) for (key, value) in match.groupdict().iteritems()
+                                if not re.match('^quote\d+$', key)
+                        )
+                        function(args)
                     break
             if not match:
                 self.warn('Could not parse line "' + line + '"')
