@@ -10,8 +10,7 @@ def re_string(name, quote_id=[0]):
     that may contain whitespace when quoted.
     The name argument specifies the capture group name the matched string
     will be stored in.
-    Unquoted strings may only contain alphanumeric characters, '_', '-' and
-    '.'
+    Unquoted strings may only contain alphanumeric characters, '_', '-' and '.'
 
     quote_id is a static variable.
     """
@@ -27,7 +26,7 @@ def re_string(name, quote_id=[0]):
     )
 
 # These patterns are used to dissect lines and map them to handler functions.
-# Capture groups are always named using the (?P<name>) syntax.
+# Capture groups must be named using the (?P<name>) syntax.
 parser_patterns = {
     # Match '{!accesslevel easy "Easy" }'
     # Note: Values may be quoted
@@ -45,7 +44,7 @@ parser_patterns = {
 
     # Match '{== Molecular Definition ($segid) ==}'
     # Note: The amount of equals signs signify depth, allowing for nested blocks
-    'blockstart': r'\{={2,}\s*(?P<head>.*?)\s*={2,}\}',
+    'blockstart': r'\{(?P<indentation>={2,})\s*(?P<head>.*?)\s*={2,}\}',
 }
 
 class CNSParser(object):
@@ -64,6 +63,9 @@ class CNSParser(object):
         # Maps regular expressions to handler functions.
         # The contents of named capture groups can be retrieved by the handler
         # in the args argument, which is a dictionary.
+        #
+        # To extend the parser without changing the original, subclass CNSParser
+        # and add or replace pattern handlers in your __init__ function.
         self.pattern_handlers = [
             (
                 parser_patterns['accesslevel'],
@@ -81,11 +83,9 @@ class CNSParser(object):
                 parser_patterns['blockstart'],
                 self.handle_head
             ),
-            # TODO: Match blocks and handle repetitions
-            # TODO: Blocks should take the top level in the components list
-            #       instead of the components themselves
         ]
 
+    # FIXME: A library shouldn't call exit(), raise an exception instead
     def warn(self, text):
         """\
         Print a warning if warnings are turned on.
@@ -98,12 +98,67 @@ class CNSParser(object):
             else:
                 print('Warning:', text, file=sys.stderr)
 
+    def error(self, text):
+        """\
+        Print an error and exit with a non-zero value.
+        """
+        print('Error:', text, file=sys.stderr)
+        exit(1)
+
     def printv(self, text):
         """\
         Print a message if verbose mode is turned on.
         """
         if self.verbose:
             print(text, file=sys.stderr)
+
+    def open_block(self, label, level):
+        if len(self.current_blocks):
+            while level <= self.current_blocks[-1]['level']:
+                self.current_blocks.pop()
+                if not len(self.current_blocks):
+                    self.error(
+                        'New block \'' + label + '\' level (' + str(level) + ')'
+                        + ' level is lower than the root level (' + str(level) + ')'
+                    )
+
+            # Add a block component to the current block component's children
+            self.current_blocks[-1]['component']['children'].append({
+                'label':     label,
+                'type':     'block',
+                'children': []
+            })
+
+            # Add a pointer to the block component to the block list
+            self.current_blocks.append({
+                'level': level,
+                'component': self.current_blocks[-1]['component']['children'][-1]
+            })
+        else:
+            # This is the root block
+            self.components.append({
+                'label':     label,
+                'type':     'block',
+                'children': []
+            })
+            self.current_blocks.append({
+                'level': level,
+                'component': self.components[-1]
+            })
+
+    def append_component(self, component):
+        if not len(self.current_blocks) or not len(self.components):
+            if 'name' in component:
+                self.error(
+                    'Form component of type \'' + component['type'] + '\' '
+                    'specified outside of (before) root block: \'' + component['name'] + '\''
+                )
+            else:
+                self.error(
+                    'Form component of type \'' + component['type'] + '\' '
+                    'specified outside of (before) root block'
+                )
+        self.current_blocks[-1]['component']['children'].append(component)
 
     def handle_accesslevel(self, args):
         """\
@@ -139,6 +194,11 @@ class CNSParser(object):
 
         if 'level' not in self.current_metadata:
             # No access level was specified, default to the lowest level, which should be 'easy'
+            if not len(self.accesslevels):
+                self.error(
+                    'No access levels specified before the first parameter '
+                    '\'' + self.current_metadata['name'] + '\''
+                )
             self.current_metadata['level'] = self.accesslevels[0]['name']
 
         if len(self.current_paragraph):
@@ -153,8 +213,7 @@ class CNSParser(object):
             + ' default  = \''   + self.current_metadata['default'] + '\''
         )
 
-        self.components.append(self.current_metadata)
-        #self.current_block.append(self.current_metadata)
+        self.append_component(self.current_metadata)
         self.current_metadata = {}
 
     def handle_metadata(self, args):
@@ -176,25 +235,24 @@ class CNSParser(object):
             self.current_paragraph = args['text']
 
     def handle_head(self, args):
-        head = re.sub('=', '', args['head'])
-        # TODO
-        pass
+        label = re.sub('=', '', args['head'])
+        self.open_block(label, len(args['indentation']))
+        # Blocks are closed automatically
 
     def write(parameters):
         # TODO
         pass
 
     def parse(self):
-        self.current_metadata  = {}
-        self.current_paragraph = {}
-        self.blocks = []
-        self.current_block = []
+        self.current_metadata  = {} # Data type, etc.
+        self.current_paragraph = {} # Documentation or parameter labels
+        self.current_blocks    = [] # Contains pointers to actual block components, used for switching between levels
 
         for line in self.source:
             line = line.rstrip()
             if not len(line):
                 if len(self.current_paragraph):
-                    self.components.append({
+                    self.append_component({
                         'type': 'paragraph',
                         'text': self.current_paragraph
                     })
@@ -221,7 +279,8 @@ class CNSParser(object):
                 self.current_paragraph = ""
 
         # Clean up
-        del self.current_metadata
+        del self.current_blocks
         del self.current_paragraph
+        del self.current_metadata
 
         return self.accesslevels, self.components
