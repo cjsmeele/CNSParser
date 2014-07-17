@@ -43,8 +43,9 @@ parser_patterns = {
     # Match '{+ choice: protein nucleic carbohydrate ligand +}'
     'metadata': r'\{\+\s*(?P<key>[^:]+?)\s*:\s*(?P<value>.+?)\s*\+}',
 
-    # Match '{======================= Molecular Definition ($segid) =========================}'
-    'blockstart': r'\{={3,}\s*(?P<head>.*?)\s*={3,}\}',
+    # Match '{== Molecular Definition ($segid) ==}'
+    # Note: The amount of equals signs signify depth, allowing for nested blocks
+    'blockstart': r'\{={2,}\s*(?P<head>.*?)\s*={2,}\}',
 }
 
 class CNSParser(object):
@@ -216,7 +217,7 @@ class CNSParser(object):
             if not match:
                 self.warn('Could not parse line "' + line + '"')
                 # Assume that the current paragraph (on the line before this
-                # one) has something to do with this unparsable line, drop it.
+                # one) describes this unparsable line, drop it.
                 self.current_paragraph = ""
 
         # Clean up
