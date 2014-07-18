@@ -4,12 +4,12 @@ from __future__ import print_function
 import sys
 import re
 
-def re_string(name, quote_id=[0]):
+def re_string(name="", quote_id=[0]):
     """\
     Generates a regular expression for matching an optionally quoted string
     that may contain whitespace when quoted.
     The name argument specifies the capture group name the matched string
-    will be stored in.
+    will be stored in. If no name is given, no capture group will be filled.
     Unquoted strings may only contain alphanumeric characters, '_', '-' and '.'
 
     quote_id is a static variable.
@@ -18,7 +18,7 @@ def re_string(name, quote_id=[0]):
     quote_name = 'quote' + str(quote_id[0]);
     return (
           r'\s*(?P<' + quote_name + r'>["' '\'' r'])?'            # Opening quote
-        + r'(?P<' + name + r'>'                                   # Start string capture
+        + ((r'(?P<' + name + r'>') if name else r'(?:')           # Start string capture
             + r'(?(' + quote_name + r').*?'                       #     Quoted string
             + r'|[a-zA-Z0-9_\-.]*)'                               #     Alternative, unquoted string
         + r')'                                                    # Stop string capture
@@ -44,8 +44,12 @@ parser_patterns = {
     # Match '{* Molecular Type *}'
     'paragraph': r'\{\*\s*(?P<text>.*?)\s*\*}',
 
+    # Match '! #multi-index=AA #type=integer'
+    # Note: This format allows for actual comments before the first hash sign
+    'hash_metadata': r'^\s*![^#]*(?P<metadata>(?:#[a-zA-Z0-9_-]+(?:\s*[=:]\s*' + re_string() + r')?)+)\s*$',
+
     # Match '{+ choice: protein nucleic carbohydrate ligand +}'
-    'metadata': r'\{\+\s*(?P<key>[^:]+?)\s*:\s*(?P<value>.+?)\s*\+}',
+    'plus_metadata': r'\{\+\s*(?P<key>[^:]+?)\s*:\s*(?P<value>.+?)\s*\+}',
 
     # Match '{== Molecular Definition ($segid) ==}'
     # Note: The amount of equals signs signify depth, allowing for nested blocks.
@@ -97,8 +101,11 @@ class CNSParser(object):
                 parser_patterns['paragraph'],
                 self.handle_paragraph
             ), (
-                parser_patterns['metadata'],
-                self.handle_metadata
+                parser_patterns['hash_metadata'],
+                self.handle_hash_metadata
+            ), (
+                parser_patterns['plus_metadata'],
+                self.handle_plus_metadata
             ), (
                 parser_patterns['blockstart'],
                 self.handle_head
@@ -212,6 +219,9 @@ class CNSParser(object):
 
         self.current_metadata['type'] = 'parameter'
 
+        if 'repeat' not in self.current_metadata:
+            self.current_metadata['repeat'] = False
+
         if 'datatype' not in self.current_metadata:
             # No datatype was specified, make a guess based on the default value
             if re.search('^\d+$', self.current_metadata['default']):
@@ -221,10 +231,10 @@ class CNSParser(object):
             else:
                 self.current_metadata['datatype'] = 'text'
 
-        if 'accesslevel' in args and args['accesslevel'] is not None:
-            if args['accesslevel'] not in self.accesslevel_names:
-                self.error('Specified access level \'' + args['accesslevel'] + '\' does not exist')
-            self.current_metadata['accesslevel'] = args['accesslevel']
+        if 'accesslevel' in self.current_metadata:
+            if (self.current_metadata['accesslevel'] not in self.accesslevel_names
+                    and self.current_metadata['accesslevel'] != 'hidden'):
+                self.error('Specified access level \'' + self.current_metadata['accesslevel'] + '\' does not exist')
         else:
             # No access level was specified, default to the highest level
             if not len(self.accesslevels):
@@ -249,7 +259,30 @@ class CNSParser(object):
         self.append_component(self.current_metadata)
         self.current_metadata = {}
 
-    def handle_metadata(self, args):
+    def handle_hash_metadata(self, args):
+        # args.metadata is a string starting with a hash sign that may contain multiple pieces of metadata
+        for setting in re.finditer(r'(#(?P<key>[a-zA-Z0-9_-]+)\s*[=:]\s*)' + re_string('value'), args['metadata']):
+            if setting.group('key') == 'level':
+                self.current_metadata.update({ 'accesslevel': setting.group('value') })
+            elif setting.group('key') == 'multi-index':
+                # TODO: Check if this repeat index is already in use in a parent block
+                self.current_metadata.update({
+                    'repeat': True,
+                    'repeat_index': setting.group('value'),
+                })
+            elif setting.group('key') == 'multi-min':
+                self.current_metadata.update({ 'repeat_min': setting.group('value') })
+            elif setting.group('key') == 'multi-max':
+                self.current_metadata.update({ 'repeat_max': setting.group('value') })
+            elif setting.group('key') == 'type':
+                self.current_metadata.update({ 'datatype': setting.group('value') })
+            else:
+                self.warn('Unknown hash_metadata key "' + setting.group('key') + '"')
+
+        # TODO: Loop through value-less settings
+
+    def handle_plus_metadata(self, args):
+        # The only known uses for this metadata format are choice and table definitions
         if args['key'] == 'choice':
             self.current_metadata.update({
                 'datatype': 'choice',
@@ -257,9 +290,10 @@ class CNSParser(object):
             })
             self.printv('Saving metadata for next parameter: datatype = choice, options = \'' + args['value'] + '\'')
         elif args['key'] == 'table':
-            self.warn('Tables are not supported')
+            # Rendering and formatting is not our responsibility
+            pass
         else:
-            self.warn('Unknown metadata key "' + args['key'] + '"')
+            self.warn('Unknown plus_metadata key "' + args['key'] + '"')
 
     def handle_paragraph(self, args):
         if len(self.current_paragraph):
