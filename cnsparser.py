@@ -289,9 +289,12 @@ class CNSParser(object):
     def handle_plus_metadata(self, args):
         # The only known uses for this metadata format are choice and table definitions
         if args['key'] == 'choice':
+            # Filter out enclosing quotation marks
+            values = [ re.sub(r'^(["|'+'\''+r'])(.*)\1$', r'\2', value) for value in args['value'].split() ]
+
             self.current_metadata.update({
                 'datatype': 'choice',
-                'options':  args['value'].split(),
+                'options':  values,
             })
             self.printv('Saving metadata for next parameter: datatype = choice, options = \'' + args['value'] + '\'')
         elif args['key'] == 'table':
