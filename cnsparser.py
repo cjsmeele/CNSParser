@@ -180,6 +180,11 @@ class CNSParser(object):
                 'component': self.components[-1]
             })
 
+        for key in self.current_metadata:
+            if key in set(['repeat', 'repeat_index', 'repeat_min', 'repeat_max']):
+                self.current_blocks[-1]['component'][key] = self.current_metadata[key]
+        self.current_metadata = {}
+
     def append_component(self, component):
         if not len(self.current_blocks) or not len(self.components):
             if 'name' in component:
