@@ -150,17 +150,100 @@ class CNSParser(object):
         if self.verbose:
             print(text, file=sys.stderr)
 
+    def squash_accesslevels(self, inherited, minimum_index, maximum_index, includes, excludes):
+        """\
+        Squash the different type of access level definitions into a single set with allowed access levels.
+        The definition sets are evaluated in the following order:
+        inherited levels, specified minimum, specified maximum, includes, excludes
+
+        Note that minimums, maximums, includes and excludes are never inherited from parent blocks;
+        We only inherit a squashed set of allowed access levels.
+        """
+        levels = set(inherited)
+
+        # Filter out levels with a lower index than the specified minimum
+        levels = [value for value in levels if accesslevel_names.index(value) < minimum_index]
+
+        # Filter out levels with a higher index than the specified maximum
+        levels = [value for value in levels if accesslevel_names.index(value) > maximum_index]
+
+        # Add explicitly included levels
+        for level in includes:
+            levels.add(level)
+
+        # Add explicitly excluded levels
+        for level in excludes:
+            levels.discard(level)
+
+        return levels
+
+    def install_common_metadata(self, component, metadata):
+        """\
+        Installs metadata that's valid for both blocks and parameters.
+        """
+        if len(self.current_blocks):
+            inherited_accesslevels = self.current_blocks[-1]['component']['accesslevels']
+        else:
+            inherited_accesslevels = set()
+
+        # Calculate allowed access levels
+        # Use provided metadata if available
+        component['accesslevels'] = self.squash_accesslevels(
+            inherited     = inherited_accesslevels,
+            minimum_index = 0 if 'accesslevel-index-min' not in self.current_metadata
+                              else self.current_metadata['accesslevel-index-min'],
+
+            maximum_index = len(self.accesslevels)-1 if 'accesslevel-index-max' not in self.current_metadata
+                                                     else self.current_metadata['accesslevel-index-max'],
+
+            includes      = set() if 'accesslevel-includes' not in self.current_metadata
+                                  else self.current_metadata['accesslevel-includes'],
+
+            excludes      = set() if 'accesslevel-excludes' not in self.current_metadata
+                                  else self.current_metadata['accesslevel-excludes'],
+        )
+
+        # Install repeat data and do some checks
+        for key, value in self.current_metadata.items():
+            # Save repeat metadata
+            if key in set(['repeat', 'repeat-index', 'repeat-min', 'repeat-max']):
+                component[key] = value
+
+        if 'repeat' in component and component['repeat']:
+            if 'repeat-index' not in component:
+                self.error('Component set to repeat but no repeat-index defined')
+            if len(self.current_blocks):
+                for block in self.current_blocks:
+                    # We can't do this check during metadata definition because
+                    # at that time we don't know if the metadata is for a block
+                    # on a higher nesting level.
+                    if block['repeat'] and block['repeat-index'] == component['repeat-index']:
+                        self.error('Cannot reuse repeat-index of parent block: "' + component['repeat-index'] + '"')
+        else:
+            component['repeat'] = False
+
     def open_block(self, label, level):
+        """\
+        NOTE: 'level' here means the depth of the block as the amount of equals
+              signs used in its definition.
+              The access level is specified in the same way as it is done for
+              parameters, using !#level metadata.
+        """
+        # Close open blocks until we are on the right level
         while len(self.current_blocks) and level <= self.current_blocks[-1]['level']:
             self.current_blocks.pop()
 
+        component = {
+            'label':     label,
+            'type':     'block',
+            'children': []
+        }
+        self.install_common_metadata(component, self.current_metadata)
+
+
         if len(self.current_blocks):
             # Add a block component to the current block component's children
-            self.current_blocks[-1]['component']['children'].append({
-                'label':     label,
-                'type':     'block',
-                'children': []
-            })
+            self.current_blocks[-1]['component']['children'].append(component)
 
             # Add a pointer to the block component to the block list
             self.current_blocks.append({
@@ -169,20 +252,11 @@ class CNSParser(object):
             })
         else:
             # This is a top-level block
-            self.components.append({
-                'label':     label,
-                'type':     'block',
-                'children': []
-            })
+            self.components.append(component)
             self.current_blocks.append({
                 'level': level,
                 'component': self.components[-1]
             })
-
-        for key in self.current_metadata:
-            if key in set(['repeat', 'repeat_index', 'repeat_min', 'repeat_max']):
-                self.current_blocks[-1]['component'][key] = self.current_metadata[key]
-        self.current_metadata = {}
 
     def append_component(self, component):
         if not len(self.current_blocks) or not len(self.components):
@@ -193,8 +267,12 @@ class CNSParser(object):
     def handle_accesslevel(self, args):
         """\
         Add an access level.
-        Access levels must be specified in order from easiest to most complex.
+        Access levels must be specified in order from easiest to most complex,
+        before any blocks or parameters are defined.
         """
+        if len(self.components) or len(self.current_blocks):
+            self.error('Access levels need to be specified before any parameters or blocks are defined')
+
         self.accesslevels.append({
             'name':  args['name'],
             'label': args['label'],
@@ -257,32 +335,51 @@ class CNSParser(object):
 
     def handle_hash_metadata(self, args):
         # args.metadata is a string starting with a hash sign that may contain multiple pieces of metadata
+        # Extract all settings from this string
         for setting in re.finditer(r'(#(?P<key>[a-zA-Z0-9_-]+)\s*[=:]\s*)' + re_string('value'), args['metadata']):
-            if setting.group('key') == 'level-min':
-                # TODO
+            key, value = setting.group('key'), setting.group('value')
+
+            if key in set(['level-min', 'level-max', 'level-include', 'level-exclude']):
+                if value not in accesslevel_names:
+                    self.error('Unknown access level specified: "' + value + '"');
+                if 'accesslevels' not in self.current_metadata:
+                    self.current_metadata['accesslevel-includes']  = set()
+                    self.current_metadata['accesslevel-excludes']  = set()
+                    self.current_metadata['accesslevel-index-min'] = 0
+                    self.current_metadata['accesslevel-index-max'] = len(self.accesslevels)-1
+
+            if key == 'level-min':
+                if value > self.current_metadata['accesslevel-index-max']:
+                    self.error('Specified minimum level is higher than the current maximum level')
+                self.current_metadata['accesslevel-index-min'] = value
+
+            elif key == 'level-max':
+                if value < self.current_metadata['accesslevel-index-min']:
+                    self.error('Specified maximum level is lower than the current minimum level')
+                self.current_metadata['accesslevel-index-max'] = value
+
+            elif key == 'level-include':
+                self.current_metadata['accesslevel-excludes'].discard(value)
+                self.current_metadata['accesslevel-includes'].add(value)
+
+            elif key == 'level-exclude':
+                self.current_metadata['accesslevel-includes'].discard(value)
+                self.current_metadata['accesslevel-excludes'].add(value)
                 pass
-            elif setting.group('key') == 'level-max':
-                # TODO
-                pass
-            elif setting.group('key') == 'level' or setting.group('key') == 'level-include':
-                # TODO
-                self.current_metadata.update({ 'accesslevel': setting.group('value') })
-            elif setting.group('key') == 'level-exclude':
-                pass
-            elif setting.group('key') == 'multi-index':
-                # TODO: Check if this repeat index is already in use in a parent block
+
+            elif key == 'multi-index':
                 self.current_metadata.update({
                     'repeat': True,
-                    'repeat_index': setting.group('value'),
+                    'repeat-index': value,
                 })
-            elif setting.group('key') == 'multi-min':
-                self.current_metadata.update({ 'repeat_min': setting.group('value') })
-            elif setting.group('key') == 'multi-max':
-                self.current_metadata.update({ 'repeat_max': setting.group('value') })
-            elif setting.group('key') == 'type':
-                self.current_metadata.update({ 'datatype': setting.group('value') })
+            elif key == 'multi-min':
+                self.current_metadata.update({ 'repeat_min': value })
+            elif key == 'multi-max':
+                self.current_metadata.update({ 'repeat_max': value })
+            elif key == 'type':
+                self.current_metadata.update({ 'datatype': value })
             else:
-                self.warn('Unknown hash_metadata key "' + setting.group('key') + '"')
+                self.warn('Unknown hash_metadata key "' + key + '"')
 
         # TODO: Loop through value-less settings
 
