@@ -124,19 +124,23 @@ class CNSParser(object):
         """\
         Print a warning if warnings are turned on.
         Exits with a non-zero value if fatal warnings are turned on.
+
+        This method should only be called in parse() context.
         """
         if self.warnings:
             if self.fatal_warnings:
-                print('Error:', text, file=sys.stderr)
+                print('Error on line ' + str(self.line_no) + ':', text, file=sys.stderr)
                 exit(1)
             else:
-                print('Warning:', text, file=sys.stderr)
+                print('Warning on line ' + str(self.line_no) + ':', text, file=sys.stderr)
 
     def error(self, text):
         """\
         Print an error and exit with a non-zero value.
+
+        This method should only be called in parse() context.
         """
-        print('Error:', text, file=sys.stderr)
+        print('Error on line ' + str(self.line_no) + ':', text, file=sys.stderr)
         exit(1)
 
     def printv(self, text):
@@ -254,8 +258,17 @@ class CNSParser(object):
     def handle_hash_metadata(self, args):
         # args.metadata is a string starting with a hash sign that may contain multiple pieces of metadata
         for setting in re.finditer(r'(#(?P<key>[a-zA-Z0-9_-]+)\s*[=:]\s*)' + re_string('value'), args['metadata']):
-            if setting.group('key') == 'level':
+            if setting.group('key') == 'level-min':
+                # TODO
+                pass
+            elif setting.group('key') == 'level-max':
+                # TODO
+                pass
+            elif setting.group('key') == 'level' or setting.group('key') == 'level-include':
+                # TODO
                 self.current_metadata.update({ 'accesslevel': setting.group('value') })
+            elif setting.group('key') == 'level-exclude':
+                pass
             elif setting.group('key') == 'multi-index':
                 # TODO: Check if this repeat index is already in use in a parent block
                 self.current_metadata.update({
@@ -312,8 +325,10 @@ class CNSParser(object):
         self.current_paragraph = {} # Documentation or parameter labels
         self.current_blocks    = [] # Contains pointers to actual block components, used for switching between levels
         self.accesslevel_names = [] # Used for inexpensive parameter access level validation
+        self.line_no           = 0
 
         for line in self.source:
+            self.line_no += 1
             line = line.rstrip()
             if not len(line):
                 if len(self.current_paragraph):
@@ -345,6 +360,7 @@ class CNSParser(object):
                 self.current_paragraph = ""
 
         # Clean up
+        del self.line_no
         del self.accesslevel_names
         del self.current_blocks
         del self.current_paragraph
