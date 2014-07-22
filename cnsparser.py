@@ -147,15 +147,10 @@ class CNSParser(object):
             print(text, file=sys.stderr)
 
     def open_block(self, label, level):
-        if len(self.current_blocks):
-            while level <= self.current_blocks[-1]['level']:
-                self.current_blocks.pop()
-                if not len(self.current_blocks):
-                    self.error(
-                        'New block \'' + label + '\' level (' + str(level) + ')'
-                        + ' level is lower than the root level (' + str(level) + ')'
-                    )
+        while len(self.current_blocks) and level <= self.current_blocks[-1]['level']:
+            self.current_blocks.pop()
 
+        if len(self.current_blocks):
             # Add a block component to the current block component's children
             self.current_blocks[-1]['component']['children'].append({
                 'label':     label,
@@ -169,7 +164,7 @@ class CNSParser(object):
                 'component': self.current_blocks[-1]['component']['children'][-1]
             })
         else:
-            # This is the root block
+            # This is a top-level block
             self.components.append({
                 'label':     label,
                 'type':     'block',
@@ -187,17 +182,9 @@ class CNSParser(object):
 
     def append_component(self, component):
         if not len(self.current_blocks) or not len(self.components):
-            if 'name' in component:
-                self.error(
-                    'Form component of type \'' + component['type'] + '\' '
-                    'specified outside of (before) root block: \'' + component['name'] + '\''
-                )
-            else:
-                self.error(
-                    'Form component of type \'' + component['type'] + '\' '
-                    'specified outside of (before) root block'
-                )
-        self.current_blocks[-1]['component']['children'].append(component)
+            self.components.append(component)
+        else:
+            self.current_blocks[-1]['component']['children'].append(component)
 
     def handle_accesslevel(self, args):
         """\
