@@ -53,7 +53,7 @@ parser_patterns = {
 
     # Match '{== Molecular Definition ($segid) ==}'
     # Note: The amount of equals signs signify depth, allowing for nested blocks.
-    'blockstart': r'\{(?P<indentation>={2,})\s*(?P<head>.*?)\s*={2,}\}',
+    'blockstart': r'\{(?P<indentation>={2,})\s*(?P<head>[^=].*?)\s*={2,}\}',
 
     # Match '! This is a comment'
     'linecomment': r'^\s*!\s*(?P<text>.*?)\s*$',
@@ -449,9 +449,24 @@ class CNSParser(object):
         self.open_block(label, len(args['indentation']))
         # Blocks are closed automatically
 
-    def write(parameters):
-        # TODO
-        pass
+    def postprocess(self, block):
+        """\
+        Hides blocks with no visible children.
+        """
+        children_hidden = True
+
+        for component in block['children']:
+            if component['type'] == 'block':
+                postprocess(component)
+            if (
+                    component['type'] in set(['block', 'parameter'])
+                    and ('hidden' not in component or not component['hidden'])
+                ):
+                children_hidden = False
+                break
+
+        block['hidden'] = children_hidden
+
 
     def parse(self):
         self.current_metadata  = {} # Data type, etc.
@@ -496,4 +511,12 @@ class CNSParser(object):
         del self.current_paragraph
         del self.current_metadata
 
+        for component in self.components:
+            if component['type'] == 'block':
+                self.postprocess(component)
+
         return self.accesslevels, self.components
+
+    def write(parameters):
+        # TODO
+        pass
