@@ -256,7 +256,7 @@ class CNSParser(object):
                     # We can't do this check during metadata definition because
                     # at that time we don't know if the metadata is for a block
                     # on a higher nesting level.
-                    if block['repeat'] and block['repeat-index'] == component['repeat-index']:
+                    if block['component']['repeat'] and block['component']['repeat-index'] == component['repeat-index']:
                         self.error('Cannot reuse repeat-index of parent block: "' + component['repeat-index'] + '"')
         else:
             component['repeat'] = False
@@ -334,9 +334,6 @@ class CNSParser(object):
 
         self.install_common_metadata(component)
 
-        #if 'repeat' not in self.current_metadata:
-        #    self.current_metadata['repeat'] = False
-
         if 'datatype' not in component:
             # No datatype was specified, make a guess based on the default value
             if re.search('^\d+$', component['default']):
@@ -409,9 +406,9 @@ class CNSParser(object):
                     'repeat-index': value,
                 })
             elif key == 'multi-min':
-                self.current_metadata.update({ 'repeat_min': value })
+                self.current_metadata.update({ 'repeat': True, 'repeat_min': value })
             elif key == 'multi-max':
-                self.current_metadata.update({ 'repeat_max': value })
+                self.current_metadata.update({ 'repeat': True, 'repeat_max': value })
             elif key == 'type':
                 self.current_metadata.update({ 'datatype': value })
             else:
