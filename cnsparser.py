@@ -4,6 +4,8 @@ from __future__ import print_function
 import sys
 import re
 
+# TODO: Replace occurrances of 'metadata' with 'attributes'
+
 def re_string(name="", quote_id=[0]):
     """\
     Generates a regular expression for matching an optionally quoted string
@@ -152,7 +154,7 @@ class CNSParser(object):
 
     def squash_accesslevels(self, inherited, minimum_index, maximum_index, includes, excludes):
         """\
-        Squash the different type of access level definitions into a single set with allowed access levels.
+        Squash the different type of access level attributes into a single set with allowed access levels.
         The definition sets are evaluated in the following order:
         inherited levels, specified minimum, specified maximum, includes, excludes
 
