@@ -206,8 +206,8 @@ class CNSParser(object):
             actual_maximum = max([self.accesslevel_names.index(name) for name in levels])
             if maximum_index > actual_maximum:
                 self.warn(
-                    'Specified minimum level \'' + self.accesslevel_names[minimum_index] + '\' '
-                    + 'is lower than the lowest actual access level for this component ('
+                    'Specified maximum level \'' + self.accesslevel_names[maximum_index] + '\' '
+                    + 'is higher than the highest actual access level for this component ('
                     + self.accesslevel_names[actual_maximum] + ')'
                 )
 
