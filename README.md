@@ -153,6 +153,15 @@ Technically, label definitions can span multiple lines just like regular
 paragraphs. This isn't recommended as long labels may be truncated by
 the interface.
 
+### Parameters
+
+Parameters are defined as follows:
+
+    {===>} name="default value";
+
+Any attributes specified before a parameter definition are applied to
+the parameter.
+
 ### Attributes
 
 Attributes are certain characteristics that can be applied to sections
@@ -170,17 +179,6 @@ It is possible to specify attributes over multiple lines like so:
     ! #level-min=easy
     ...
     (parameter definition)
-
-### Parameters
-
-Parameters are defined as follows:
-
-    {===>} name="default value";
-
-Any attributes specified before a parameter definition are applied to
-the parameter.
-
-### Attributes
 
 CNSParser supports the following parameter attributes:
 
