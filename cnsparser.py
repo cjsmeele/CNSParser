@@ -148,7 +148,7 @@ class CNSParser(object):
         Print a message if verbose mode is turned on.
         """
         if self.verbose:
-            print(text, file=sys.stderr)
+            print('Line ' + str(self.line_no) + ':', text, file=sys.stderr)
 
     def squash_accesslevels(self, inherited, minimum_index, maximum_index, includes, excludes):
         """\
@@ -158,43 +158,82 @@ class CNSParser(object):
 
         Note that minimums, maximums, includes and excludes are never inherited from parent blocks;
         We only inherit a squashed set of allowed access levels.
+
+        Also important is that a parameter or block is NOT allowed to have an access level that is
+        lower than that of its parent. As a result, #level-include is only useful
+        when in the same metadata a level-min or level-max was specified.
+
+        This function saves the access levels in a list instead of a set as the JSON module cannot dump sets.
         """
+        if inherited is None:
+            inherited = set(self.accesslevel_names)
+        else:
+            # Inherited levels will most likely be passed as a list instead of a set
+            inherited = set(inherited)
+
         levels = set(inherited)
 
-        # Filter out levels with a lower index than the specified minimum
-        levels = [value for value in levels if accesslevel_names.index(value) < minimum_index]
+        if minimum_index is not None:
+            # Filter out levels with a lower index than the specified minimum
+            levels = set([value for value in levels if self.accesslevel_names.index(value) >= minimum_index])
 
-        # Filter out levels with a higher index than the specified maximum
-        levels = [value for value in levels if accesslevel_names.index(value) > maximum_index]
+        if maximum_index is not None:
+            # Filter out levels with a higher index than the specified maximum
+            levels = set([value for value in levels if self.accesslevel_names.index(value) <= maximum_index])
 
         # Add explicitly included levels
-        for level in includes:
-            levels.add(level)
+        levels |= includes
 
-        # Add explicitly excluded levels
-        for level in excludes:
-            levels.discard(level)
+        # Remove explicitly excluded levels
+        levels -= excludes
 
-        return levels
+        # We are strict in access level inheritance. If you need a lower-level
+        # parameter in an otherwise restricted block, lower the level requirement for that block
+        # and use excludes to deny access to other parameters.
+        if not inherited.issuperset(levels):
+            self.error('Cannot allow levels that are not allowed in a parent block')
 
-    def install_common_metadata(self, component, metadata):
+        if minimum_index is not None:
+            actual_minimum = min([self.accesslevel_names.index(name) for name in levels])
+            if minimum_index < actual_minimum:
+                self.warn(
+                    'Specified minimum level \'' + self.accesslevel_names[minimum_index] + '\' '
+                    + 'is lower than the lowest actual access level for this component ('
+                    + self.accesslevel_names[actual_minimum] + ')'
+                )
+
+        if maximum_index is not None:
+            actual_maximum = max([self.accesslevel_names.index(name) for name in levels])
+            if maximum_index > actual_maximum:
+                self.warn(
+                    'Specified minimum level \'' + self.accesslevel_names[minimum_index] + '\' '
+                    + 'is lower than the lowest actual access level for this component ('
+                    + self.accesslevel_names[actual_maximum] + ')'
+                )
+
+        return list(levels)
+
+    def install_common_metadata(self, component):
         """\
         Installs metadata that's valid for both blocks and parameters.
+        Clears the metadata dict afterwards.
         """
         if len(self.current_blocks):
             inherited_accesslevels = self.current_blocks[-1]['component']['accesslevels']
         else:
-            inherited_accesslevels = set()
+            # Notify squash_accesslevels that we have no parent.
+            # Note that this is different from passing an empty set.
+            inherited_accesslevels = None
 
         # Calculate allowed access levels
         # Use provided metadata if available
         component['accesslevels'] = self.squash_accesslevels(
             inherited     = inherited_accesslevels,
-            minimum_index = 0 if 'accesslevel-index-min' not in self.current_metadata
-                              else self.current_metadata['accesslevel-index-min'],
+            minimum_index = None if 'accesslevel-index-min' not in self.current_metadata
+                                 else self.current_metadata['accesslevel-index-min'],
 
-            maximum_index = len(self.accesslevels)-1 if 'accesslevel-index-max' not in self.current_metadata
-                                                     else self.current_metadata['accesslevel-index-max'],
+            maximum_index = None if 'accesslevel-index-max' not in self.current_metadata
+                                 else self.current_metadata['accesslevel-index-max'],
 
             includes      = set() if 'accesslevel-includes' not in self.current_metadata
                                   else self.current_metadata['accesslevel-includes'],
@@ -222,6 +261,8 @@ class CNSParser(object):
         else:
             component['repeat'] = False
 
+        self.current_metadata = {}
+
     def open_block(self, label, level):
         """\
         NOTE: 'level' here means the depth of the block as the amount of equals
@@ -238,8 +279,7 @@ class CNSParser(object):
             'type':     'block',
             'children': []
         }
-        self.install_common_metadata(component, self.current_metadata)
-
+        self.install_common_metadata(component)
 
         if len(self.current_blocks):
             # Add a block component to the current block component's children
@@ -284,54 +324,41 @@ class CNSParser(object):
     def handle_parameter(self, args):
         """\
         Insert a new parameter into the component list, using all applicable
-        metadata specified since the last parameter.
+        metadata specified since the last parameter or block.
         """
-        self.current_metadata.update({
+        component = {
             'name':    args['name'],
             'default': args['value'],
-        })
+            'type':    'parameter',
+        }
 
-        self.current_metadata['type'] = 'parameter'
+        self.install_common_metadata(component)
 
-        if 'repeat' not in self.current_metadata:
-            self.current_metadata['repeat'] = False
+        #if 'repeat' not in self.current_metadata:
+        #    self.current_metadata['repeat'] = False
 
-        if 'datatype' not in self.current_metadata:
+        if 'datatype' not in component:
             # No datatype was specified, make a guess based on the default value
-            if re.search('^\d+$', self.current_metadata['default']):
-                self.current_metadata['datatype'] = 'int'
-            elif re.search('^[0-9.]+$', self.current_metadata['default']):
-                self.current_metadata['datatype'] = 'float'
+            if re.search('^\d+$', component['default']):
+                component['datatype'] = 'int'
+            elif re.search('^[0-9.]+$', component['default']):
+                component['datatype'] = 'float'
             else:
-                self.current_metadata['datatype'] = 'text'
-
-        if 'accesslevel' in self.current_metadata:
-            if (self.current_metadata['accesslevel'] not in self.accesslevel_names
-                    and self.current_metadata['accesslevel'] != 'hidden'):
-                self.error('Specified access level \'' + self.current_metadata['accesslevel'] + '\' does not exist')
-        else:
-            # No access level was specified, default to the highest level
-            if not len(self.accesslevels):
-                self.error(
-                    'No access levels specified before the first parameter '
-                    '\'' + self.current_metadata['name'] + '\''
-                )
-            self.current_metadata['accesslevel'] = self.accesslevels[-1]['name']
+                component['datatype'] = 'text'
 
         if len(self.current_paragraph):
-            self.current_metadata['label'] = self.current_paragraph
+            component['label'] = self.current_paragraph
             self.current_paragraph = ""
         else:
-            self.warn('Parameter "' + self.current_metadata['name'] + '" is not labeled')
+            self.warn('Parameter "' + component['name'] + '" is not labeled')
 
         self.printv(
-            'Added parameter \'' + self.current_metadata['name']    + '\''
-            + ' datatype = '     + self.current_metadata['datatype']
-            + ' default  = \''   + self.current_metadata['default'] + '\''
+            'Added parameter \'' + component['name']    + '\''
+            + ' datatype = '     + component['datatype']
+            + ' default  = \''   + component['default'] + '\''
         )
 
-        self.append_component(self.current_metadata)
-        self.current_metadata = {}
+        self.append_component(component)
 
     def handle_hash_metadata(self, args):
         # args.metadata is a string starting with a hash sign that may contain multiple pieces of metadata
@@ -340,23 +367,32 @@ class CNSParser(object):
             key, value = setting.group('key'), setting.group('value')
 
             if key in set(['level-min', 'level-max', 'level-include', 'level-exclude']):
-                if value not in accesslevel_names:
+                if value not in self.accesslevel_names:
                     self.error('Unknown access level specified: "' + value + '"');
-                if 'accesslevels' not in self.current_metadata:
-                    self.current_metadata['accesslevel-includes']  = set()
-                    self.current_metadata['accesslevel-excludes']  = set()
-                    self.current_metadata['accesslevel-index-min'] = 0
-                    self.current_metadata['accesslevel-index-max'] = len(self.accesslevels)-1
+
+                if 'accesslevel-includes' not in self.current_metadata:
+                    self.current_metadata['accesslevel-includes'] = set()
+                if 'accesslevel-excludes' not in self.current_metadata:
+                    self.current_metadata['accesslevel-excludes'] = set()
 
             if key == 'level-min':
-                if value > self.current_metadata['accesslevel-index-max']:
-                    self.error('Specified minimum level is higher than the current maximum level')
-                self.current_metadata['accesslevel-index-min'] = value
+                if (
+                        'accesslevel-index-max' in self.current_metadata
+                        and self.accesslevel_names.index(value) > self.current_metadata['accesslevel-index-max']
+                    ):
+                    self.error(
+                        'Specified minimum level is higher than the current maximum level ('
+                        + self.accesslevel_names[self.current_metadata['accesslevel-index-max']] + ')'
+                    )
+                self.current_metadata['accesslevel-index-min'] = self.accesslevel_names.index(value)
 
             elif key == 'level-max':
-                if value < self.current_metadata['accesslevel-index-min']:
+                if (
+                        'accesslevel-index-min' in self.current_metadata
+                        and self.accesslevel_names.index(value) < self.current_metadata['accesslevel-index-min']
+                    ):
                     self.error('Specified maximum level is lower than the current minimum level')
-                self.current_metadata['accesslevel-index-max'] = value
+                self.current_metadata['accesslevel-index-max'] = self.accesslevel_names.index(value)
 
             elif key == 'level-include':
                 self.current_metadata['accesslevel-excludes'].discard(value)
@@ -439,9 +475,6 @@ class CNSParser(object):
                 match = re.search(pattern, line)
                 if match:
                     if function is not None:
-                        #print('\n' + '-'*80, file=sys.stderr)
-                        #print(line, file=sys.stderr)
-
                         # Create an args dictionary based on named capture groups
                         # in the regex match. Filter out quote captures.
                         args = dict(
