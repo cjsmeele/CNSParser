@@ -330,6 +330,7 @@ class CNSParser(object):
             'name':    args['name'],
             'default': args['value'],
             'type':    'parameter',
+            'hidden':  False if 'hidden' not in self.current_metadata else self.current_metadata['hidden'],
         }
 
         self.install_common_metadata(component)
@@ -360,7 +361,7 @@ class CNSParser(object):
     def handle_hash_metadata(self, args):
         # args.metadata is a string starting with a hash sign that may contain multiple pieces of metadata
         # Extract all settings from this string
-        for setting in re.finditer(r'(#(?P<key>[a-zA-Z0-9_-]+)\s*[=:]\s*)' + re_string('value'), args['metadata']):
+        for setting in re.finditer(r'#(?P<key>[a-zA-Z0-9_-]+)(?:\s*[=:]\s*' + re_string('value') + ')?', args['metadata']):
             key, value = setting.group('key'), setting.group('value')
 
             if key in set(['level-min', 'level-max', 'level-include', 'level-exclude']):
@@ -398,7 +399,9 @@ class CNSParser(object):
             elif key == 'level-exclude':
                 self.current_metadata['accesslevel-includes'].discard(value)
                 self.current_metadata['accesslevel-excludes'].add(value)
-                pass
+
+            elif key == 'hidden':
+                self.current_metadata['hidden'] = True
 
             elif key == 'multi-index':
                 self.current_metadata.update({
