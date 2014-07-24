@@ -4,8 +4,6 @@ from __future__ import print_function
 import sys
 import re
 
-# TODO: Replace occurrances of 'metadata' with 'attributes'
-# TODO: Replace occurrances of 'block' with 'section'
 
 def re_string(name="", quote_id=[0]):
     """\
@@ -48,14 +46,14 @@ parser_patterns = {
 
     # Match '! #multi-index=AA #type=integer'
     # Note: This format allows for actual comments before the first hash sign
-    'hash_metadata': r'^\s*![^#]*(?P<metadata>(?:#[a-zA-Z0-9_-]+(?:\s*[=:]\s*' + re_string() + r')?)+)\s*$',
+    'hash_attributes': r'^\s*![^#]*(?P<attributes>(?:#[a-zA-Z0-9_-]+(?:\s*[=:]\s*' + re_string() + r')?)+)\s*$',
 
     # Match '{+ choice: protein nucleic carbohydrate ligand +}'
-    'plus_metadata': r'\{\+\s*(?P<key>[^:]+?)\s*:\s*(?P<value>.+?)\s*\+}',
+    'plus_attributes': r'\{\+\s*(?P<key>[^:]+?)\s*:\s*(?P<value>.+?)\s*\+}',
 
-    # Match '{== Molecular Definition ($segid) ==}'
-    # Note: The amount of equals signs signify depth, allowing for nested blocks.
-    'blockstart': r'\{(?P<indentation>={2,})\s*(?P<head>[^=].*?)\s*={2,}\}',
+    # Match '{== Molecular Definition NN ==}'
+    # Note: The amount of equals signs signify depth, allowing for nested sections.
+    'section_start': r'\{(?P<indentation>={2,})\s*(?P<head>[^=].*?)\s*={2,}\}',
 
     # Match '! This is a comment'
     'linecomment': r'^\s*!\s*(?P<text>.*?)\s*$',
@@ -106,13 +104,13 @@ class CNSParser(object):
                 parser_patterns['paragraph'],
                 self.handle_paragraph
             ), (
-                parser_patterns['hash_metadata'],
-                self.handle_hash_metadata
+                parser_patterns['hash_attributes'],
+                self.handle_hash_attributes
             ), (
-                parser_patterns['plus_metadata'],
-                self.handle_plus_metadata
+                parser_patterns['plus_attributes'],
+                self.handle_plus_attributes
             ), (
-                parser_patterns['blockstart'],
+                parser_patterns['section_start'],
                 self.handle_head
             ), (
                 # Regular comments must be recognized to avoid warnings.
@@ -159,12 +157,12 @@ class CNSParser(object):
         The definition sets are evaluated in the following order:
         inherited levels, specified minimum, specified maximum, includes, excludes
 
-        Note that minimums, maximums, includes and excludes are never inherited from parent blocks;
+        Note that minimums, maximums, includes and excludes are never inherited from parent sections;
         We only inherit a squashed set of allowed access levels.
 
-        Also important is that a parameter or block is NOT allowed to have an access level that is
+        Also important is that a parameter or section is NOT allowed to have an access level that is
         lower than that of its parent. As a result, #level-include is only useful
-        when in the same metadata a level-min or level-max was specified.
+        when for the same parameter or section a level-min or level-max attribute was specified.
 
         This function saves the access levels in a list instead of a set as the JSON module cannot dump sets.
         """
@@ -191,10 +189,10 @@ class CNSParser(object):
         levels -= excludes
 
         # We are strict in access level inheritance. If you need a lower-level
-        # parameter in an otherwise restricted block, lower the level requirement for that block
+        # parameter in an otherwise restricted section, lower the level requirement for that section
         # and use excludes to deny access to other parameters.
         if not inherited.issuperset(levels):
-            self.error('Cannot allow levels that are not allowed in a parent block')
+            self.error('Cannot allow levels that are not allowed in a parent section')
 
         if minimum_index is not None:
             actual_minimum = min([self.accesslevel_names.index(name) for name in levels])
@@ -216,105 +214,105 @@ class CNSParser(object):
 
         return list(levels)
 
-    def install_common_metadata(self, component):
+    def install_common_attributes(self, component):
         """\
-        Installs metadata that's valid for both blocks and parameters.
-        Clears the metadata dict afterwards.
+        Installs attributes that are valid for both sections and parameters.
+        Clears the attributes dict afterwards.
         """
-        if len(self.current_blocks):
-            inherited_accesslevels = self.current_blocks[-1]['component']['accesslevels']
+        if len(self.current_sections):
+            inherited_accesslevels = self.current_sections[-1]['component']['accesslevels']
         else:
             # Notify squash_accesslevels that we have no parent.
             # Note that this is different from passing an empty set.
             inherited_accesslevels = None
 
         # Calculate allowed access levels
-        # Use provided metadata if available
+        # Use provided attributes if available
         component['accesslevels'] = self.squash_accesslevels(
             inherited     = inherited_accesslevels,
-            minimum_index = None if 'accesslevel-index-min' not in self.current_metadata
-                                 else self.current_metadata['accesslevel-index-min'],
+            minimum_index = None if 'accesslevel-index-min' not in self.current_attributes
+                                 else self.current_attributes['accesslevel-index-min'],
 
-            maximum_index = None if 'accesslevel-index-max' not in self.current_metadata
-                                 else self.current_metadata['accesslevel-index-max'],
+            maximum_index = None if 'accesslevel-index-max' not in self.current_attributes
+                                 else self.current_attributes['accesslevel-index-max'],
 
-            includes      = set() if 'accesslevel-includes' not in self.current_metadata
-                                  else self.current_metadata['accesslevel-includes'],
+            includes      = set() if 'accesslevel-includes' not in self.current_attributes
+                                  else self.current_attributes['accesslevel-includes'],
 
-            excludes      = set() if 'accesslevel-excludes' not in self.current_metadata
-                                  else self.current_metadata['accesslevel-excludes'],
+            excludes      = set() if 'accesslevel-excludes' not in self.current_attributes
+                                  else self.current_attributes['accesslevel-excludes'],
         )
 
         # Install repeat data and do some checks
-        for key, value in self.current_metadata.items():
-            # Save repeat metadata
+        for key, value in self.current_attributes.items():
+            # Save repeat attributes
             if key in set(['repeat', 'repeat-index', 'repeat-min', 'repeat-max']):
                 component[key] = value
 
         if 'repeat' in component and component['repeat']:
             if 'repeat-index' not in component:
                 self.error('Component set to repeat but no repeat-index defined')
-            if len(self.current_blocks):
-                for block in self.current_blocks:
-                    # We can't do this check during metadata definition because
-                    # at that time we don't know if the metadata is for a block
+            if len(self.current_sections):
+                for section in self.current_sections:
+                    # We can't do this check during attribute definition because
+                    # at that time we don't know if the attribute is for a section
                     # on a higher nesting level.
-                    if block['component']['repeat'] and block['component']['repeat-index'] == component['repeat-index']:
-                        self.error('Cannot reuse repeat-index of parent block: "' + component['repeat-index'] + '"')
+                    if section['component']['repeat'] and section['component']['repeat-index'] == component['repeat-index']:
+                        self.error('Cannot reuse repeat-index of parent section: "' + component['repeat-index'] + '"')
         else:
             component['repeat'] = False
 
-        self.current_metadata = {}
+        self.current_attributes = {}
 
-    def open_block(self, label, level):
+    def open_section(self, label, level):
         """\
-        NOTE: 'level' here means the depth of the block as the amount of equals
+        NOTE: 'level' here means the depth of the section as the amount of equals
               signs used in its definition.
               The access level is specified in the same way as it is done for
-              parameters, using !#level metadata.
+              parameters, using !#level attributes.
         """
-        # Close open blocks until we are on the right level
-        while len(self.current_blocks) and level <= self.current_blocks[-1]['level']:
-            self.current_blocks.pop()
+        # Close open sections until we are on the right level
+        while len(self.current_sections) and level <= self.current_sections[-1]['level']:
+            self.current_sections.pop()
 
         component = {
             'label':     label,
-            'type':     'block',
+            'type':     'section',
             'children': []
         }
-        self.install_common_metadata(component)
+        self.install_common_attributes(component)
 
-        if len(self.current_blocks):
-            # Add a block component to the current block component's children
-            self.current_blocks[-1]['component']['children'].append(component)
+        if len(self.current_sections):
+            # Add a section component to the current section component's children
+            self.current_sections[-1]['component']['children'].append(component)
 
-            # Add a pointer to the block component to the block list
-            self.current_blocks.append({
+            # Add a pointer to the section component to the section list
+            self.current_sections.append({
                 'level': level,
-                'component': self.current_blocks[-1]['component']['children'][-1]
+                'component': self.current_sections[-1]['component']['children'][-1]
             })
         else:
-            # This is a top-level block
+            # This is a top-level section
             self.components.append(component)
-            self.current_blocks.append({
+            self.current_sections.append({
                 'level': level,
                 'component': self.components[-1]
             })
 
     def append_component(self, component):
-        if not len(self.current_blocks) or not len(self.components):
+        if not len(self.current_sections) or not len(self.components):
             self.components.append(component)
         else:
-            self.current_blocks[-1]['component']['children'].append(component)
+            self.current_sections[-1]['component']['children'].append(component)
 
     def handle_accesslevel(self, args):
         """\
         Add an access level.
         Access levels must be specified in order from easiest to most complex,
-        before any blocks or parameters are defined.
+        before any sections or parameters are defined.
         """
-        if len(self.components) or len(self.current_blocks):
-            self.error('Access levels need to be specified before any parameters or blocks are defined')
+        if len(self.components) or len(self.current_sections):
+            self.error('Access levels need to be specified before any parameters or sections are defined')
 
         self.accesslevels.append({
             'name':  args['name'],
@@ -327,19 +325,19 @@ class CNSParser(object):
     def handle_parameter(self, args):
         """\
         Insert a new parameter into the component list, using all applicable
-        metadata specified since the last parameter or block.
+        attributes specified since the last parameter or section.
         """
         component = {
             'name':    args['name'],
             'default': args['value'],
             'type':    'parameter',
-            'hidden':  False if 'hidden' not in self.current_metadata else self.current_metadata['hidden'],
+            'hidden':  False if 'hidden' not in self.current_attributes else self.current_attributes['hidden'],
         }
 
-        if 'datatype' in self.current_metadata:
-            component['datatype'] = self.current_metadata['datatype']
+        if 'datatype' in self.current_attributes:
+            component['datatype'] = self.current_attributes['datatype']
             if component['datatype'] == 'choice':
-                component['options'] = self.current_metadata['options']
+                component['options'] = self.current_attributes['options']
         else:
             # No datatype was specified, make a guess based on the default value
             if re.search('^\d+$', component['default']):
@@ -350,7 +348,7 @@ class CNSParser(object):
                 component['datatype'] = 'text'
 
 
-        self.install_common_metadata(component)
+        self.install_common_attributes(component)
 
         if len(self.current_paragraph):
             component['label'] = self.current_paragraph
@@ -366,83 +364,83 @@ class CNSParser(object):
 
         self.append_component(component)
 
-    def handle_hash_metadata(self, args):
-        # args.metadata is a string starting with a hash sign that may contain multiple pieces of metadata
+    def handle_hash_attributes(self, args):
+        # args.attributes is a string starting with a hash sign that may contain multiple attributes
         # Extract all settings from this string
-        for setting in re.finditer(r'#(?P<key>[a-zA-Z0-9_-]+)(?:\s*[=:]\s*' + re_string('value') + ')?', args['metadata']):
+        for setting in re.finditer(r'#(?P<key>[a-zA-Z0-9_-]+)(?:\s*[=:]\s*' + re_string('value') + ')?', args['attributes']):
             key, value = setting.group('key'), setting.group('value')
 
             if key in set(['level-min', 'level-max', 'level-include', 'level-exclude']):
                 if value not in self.accesslevel_names:
                     self.error('Unknown access level specified: "' + value + '"');
 
-                if 'accesslevel-includes' not in self.current_metadata:
-                    self.current_metadata['accesslevel-includes'] = set()
-                if 'accesslevel-excludes' not in self.current_metadata:
-                    self.current_metadata['accesslevel-excludes'] = set()
+                if 'accesslevel-includes' not in self.current_attributes:
+                    self.current_attributes['accesslevel-includes'] = set()
+                if 'accesslevel-excludes' not in self.current_attributes:
+                    self.current_attributes['accesslevel-excludes'] = set()
 
             if key == 'level-min':
                 if (
-                        'accesslevel-index-max' in self.current_metadata
-                        and self.accesslevel_names.index(value) > self.current_metadata['accesslevel-index-max']
+                        'accesslevel-index-max' in self.current_attributes
+                        and self.accesslevel_names.index(value) > self.current_attributes['accesslevel-index-max']
                     ):
                     self.error(
                         'Specified minimum level is higher than the current maximum level ('
-                        + self.accesslevel_names[self.current_metadata['accesslevel-index-max']] + ')'
+                        + self.accesslevel_names[self.current_attributes['accesslevel-index-max']] + ')'
                     )
-                self.current_metadata['accesslevel-index-min'] = self.accesslevel_names.index(value)
+                self.current_attributes['accesslevel-index-min'] = self.accesslevel_names.index(value)
 
             elif key == 'level-max':
                 if (
-                        'accesslevel-index-min' in self.current_metadata
-                        and self.accesslevel_names.index(value) < self.current_metadata['accesslevel-index-min']
+                        'accesslevel-index-min' in self.current_attributes
+                        and self.accesslevel_names.index(value) < self.current_attributes['accesslevel-index-min']
                     ):
                     self.error('Specified maximum level is lower than the current minimum level')
-                self.current_metadata['accesslevel-index-max'] = self.accesslevel_names.index(value)
+                self.current_attributes['accesslevel-index-max'] = self.accesslevel_names.index(value)
 
             elif key == 'level-include':
-                self.current_metadata['accesslevel-excludes'].discard(value)
-                self.current_metadata['accesslevel-includes'].add(value)
+                self.current_attributes['accesslevel-excludes'].discard(value)
+                self.current_attributes['accesslevel-includes'].add(value)
 
             elif key == 'level-exclude':
-                self.current_metadata['accesslevel-includes'].discard(value)
-                self.current_metadata['accesslevel-excludes'].add(value)
+                self.current_attributes['accesslevel-includes'].discard(value)
+                self.current_attributes['accesslevel-excludes'].add(value)
 
             elif key == 'hidden':
-                self.current_metadata['hidden'] = True
+                self.current_attributes['hidden'] = True
 
             elif key == 'multi-index':
-                self.current_metadata.update({
+                self.current_attributes.update({
                     'repeat': True,
                     'repeat-index': value,
                 })
             elif key == 'multi-min':
-                self.current_metadata.update({ 'repeat': True, 'repeat_min': value })
+                self.current_attributes.update({ 'repeat': True, 'repeat_min': value })
             elif key == 'multi-max':
-                self.current_metadata.update({ 'repeat': True, 'repeat_max': value })
+                self.current_attributes.update({ 'repeat': True, 'repeat_max': value })
             elif key == 'type':
-                self.current_metadata.update({ 'datatype': value })
+                self.current_attributes.update({ 'datatype': value })
             else:
-                self.warn('Unknown hash_metadata key "' + key + '"')
+                self.warn('Unknown hash_attributes key "' + key + '"')
 
         # TODO: Loop through value-less settings
 
-    def handle_plus_metadata(self, args):
-        # The only known uses for this metadata format are choice and table definitions
+    def handle_plus_attributes(self, args):
+        # The only known uses for this attribute format are choice and table definitions
         if args['key'] == 'choice':
             # Filter out enclosing quotation marks
             values = [ re.sub(r'^(["|'+'\''+r'])(.*)\1$', r'\2', value) for value in args['value'].split() ]
 
-            self.current_metadata.update({
+            self.current_attributes.update({
                 'datatype': 'choice',
                 'options':  values,
             })
-            self.printv('Saving metadata for next parameter: datatype = choice, options = \'' + args['value'] + '\'')
+            self.printv('Saving attributes for next parameter: datatype = choice, options = \'' + args['value'] + '\'')
         elif args['key'] == 'table':
             # Rendering and formatting is not our responsibility
             pass
         else:
-            self.warn('Unknown plus_metadata key "' + args['key'] + '"')
+            self.warn('Unknown plus_attributes key "' + args['key'] + '"')
 
     def handle_paragraph(self, args):
         if len(self.current_paragraph):
@@ -454,34 +452,34 @@ class CNSParser(object):
 
     def handle_head(self, args):
         label = re.sub('=', '', args['head'])
-        self.open_block(label, len(args['indentation']))
+        self.open_section(label, len(args['indentation']))
         # Blocks are closed automatically
 
-    def postprocess(self, block):
+    def postprocess(self, section):
         """\
-        Hides blocks with no visible children.
+        Hides sections with no visible children.
         """
         children_hidden = True
 
-        for component in block['children']:
-            if component['type'] == 'block':
+        for component in section['children']:
+            if component['type'] == 'section':
                 postprocess(component)
             if (
-                    component['type'] in set(['block', 'parameter'])
+                    component['type'] in set(['section', 'parameter'])
                     and ('hidden' not in component or not component['hidden'])
                 ):
                 children_hidden = False
                 break
 
-        block['hidden'] = children_hidden
+        section['hidden'] = children_hidden
 
 
     def parse(self):
-        self.current_metadata  = {} # Data type, etc.
-        self.current_paragraph = {} # Documentation or parameter labels
-        self.current_blocks    = [] # Contains pointers to actual block components, used for switching between levels
-        self.accesslevel_names = [] # Used for inexpensive parameter access level validation
-        self.line_no           = 0
+        self.current_attributes = {} # Data type, etc.
+        self.current_paragraph  = {} # Documentation or parameter labels
+        self.current_sections   = [] # Contains pointers to actual section components, used for switching between levels
+        self.accesslevel_names  = [] # Used for inexpensive parameter access level validation
+        self.line_no            = 0
 
         for line in self.source:
             self.line_no += 1
@@ -515,12 +513,12 @@ class CNSParser(object):
         # Clean up
         del self.line_no
         del self.accesslevel_names
-        del self.current_blocks
+        del self.current_sections
         del self.current_paragraph
-        del self.current_metadata
+        del self.current_attributes
 
         for component in self.components:
-            if component['type'] == 'block':
+            if component['type'] == 'section':
                 self.postprocess(component)
 
         return self.accesslevels, self.components
