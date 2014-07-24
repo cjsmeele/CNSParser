@@ -66,6 +66,9 @@ parser_patterns = {
     'blockcomment': r'\{\s*(?P<text>[^}]*?)\s*\}',
 }
 
+class ParserException(StandardError):
+    pass
+
 class CNSParser(object):
 
     def __init__(self, source=sys.stdin, verbose=False, warnings=False, fatal_warnings=False):
@@ -121,29 +124,27 @@ class CNSParser(object):
             ),
         ]
 
-    # FIXME: A library shouldn't call exit(), raise an exception instead
     def warn(self, text):
         """\
         Print a warning if warnings are turned on.
-        Exits with a non-zero value if fatal warnings are turned on.
+        Throws a ParserException if fatal warnings are turned on.
 
         This method should only be called in parse() context.
         """
         if self.warnings:
             if self.fatal_warnings:
-                print('Error on line ' + str(self.line_no) + ':', text, file=sys.stderr)
-                exit(1)
+                raise ParserException('Error on line ' + str(self.line_no) + ': ' + text)
+
             else:
                 print('Warning on line ' + str(self.line_no) + ':', text, file=sys.stderr)
 
     def error(self, text):
         """\
-        Print an error and exit with a non-zero value.
+        Throws a ParserException.
 
         This method should only be called in parse() context.
         """
-        print('Error on line ' + str(self.line_no) + ':', text, file=sys.stderr)
-        exit(1)
+        raise ParserException('Error on line ' + str(self.line_no) + ': ' + text)
 
     def printv(self, text):
         """\
