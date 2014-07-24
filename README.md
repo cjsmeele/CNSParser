@@ -184,11 +184,12 @@ CNSParser supports the following parameter attributes:
 
 #### type
 
-Specifies the datatype. Can be one of 'integer', 'float', 'string' and
-'file'.
+Specifies the datatype. Can be one of 'integer', 'float', 'string',
+'file', and 'choice'.
 
 This attribute is optional. When no type is specified, CNSParser tries
-to deduce it from the default value.
+to deduce it from the default value, or sets it to 'choice' when a `{+
+choice +}` line was found (see below).
 
 #### hidden
 
@@ -224,7 +225,7 @@ For example, consider the following hierarchy of sections (refer to the
     {===>} repeatable_parameter_NN_MM = 1;
 
     ! The following generates a parser error: The parameter name does
-    ! not contain the 'NN' placeholder of its parent block
+    ! not contain the 'NN' placeholder of its parent section
 
     ! #multi-index=MM
     {===>} repeatable_parameter_MM = 1;
@@ -269,13 +270,40 @@ Explicitly deny certain access levels.
 
 See also "Notes on access level inheritance".
 
+### Other attributes
+
+#### Choices
+
+CNSParser uses the same syntax as the inp2form script for choice
+parameteres, namely:
+
+    {+ choice: option1 "option2" option3 +}
+
+The interface may choose how to render a choice-type parameter. For
+example, an application might decide to use radio buttons when there are
+less than 4 options and use dropdown menus otherwise (this is consistent
+with inp2form).
+
+#### Tables
+
+We believe the data model should not have anything to do with the
+representation. Therefore table attributes are not supported by the
+parser and will generate a warning when warnings are turned on.
+
+Another reason for this decision is the fact that our [primary interface
+implementation](https://github.com/csmeele/HADDOCK-WebUI) does not
+support tables.
+
+It is best to group parameters with sections instead, especially now
+that they can be nested and repeated.
+
 ### Sections
 
 Sections are defined as follows:
 
-    {==== Some block ====}
+    {==== Some section ====}
 
-The amount of equals signs before the section name signifies te depth
+The amount of equals signs before the section name signifies the depth
 of the section, as shown by this example:
 
     {==== Level 1 ====}
@@ -302,7 +330,44 @@ used on both sides of the section header.
 
 ### Notes on access level inheritance
 
-_TODO_
+The list of allowed access levels is the only attribute that can be
+inherited by sections and parameters.
+
+When specifying the allowed access levels for a section or parameter,
+there are four attributes that can be given:
+
+- `level-min`
+- `level-max`
+- `level-include`
+- `level-exclude`
+
+On section or parameter definition, all level attributes specified
+specifically for that component are calculated into a single set of
+allowed access levels. This is the list that is inherited by child
+components, in case of a section.
+
+The above attributes can **not** be used to grant access to access
+levels that are not allowed in a parent section. To achieve this, one must
+decrease the minimum access level of the parent section (or include the
+required level with a `level-include` before the parent section).
+
+Compiling the list of allowed access levels for a component goes as
+follows:
+
+1. Does this component have a parent?
+  - (yes) Start out with the parent's list of allowed access levels
+  - (no) Start out with all access levels enabled
+2. Is `level-min` set for this component?
+  - (yes) Remove all access levels that are below this minimum level
+3. Is `level-max` set for this component?
+  - (yes) Remove all access levels that are above this maximum level
+4. Re-add levels specified with `level-include` for this component
+   (Note that components not in our starting set can not be added)
+5. Remove levels specified with `level-exclude` for this component
+
+In the future, CNSParser may allow setting lower access levels for
+section children, and automatically update access level information for
+the parent block and siblings.
 
 For reference, see the function `squash_accesslevels()` in cnsparser.py.
 

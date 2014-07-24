@@ -5,6 +5,7 @@ import sys
 import re
 
 # TODO: Replace occurrances of 'metadata' with 'attributes'
+# TODO: Replace occurrances of 'block' with 'section'
 
 def re_string(name="", quote_id=[0]):
     """\
