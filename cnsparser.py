@@ -36,8 +36,7 @@ parser_patterns = {
 
     # Match '{===>} prot_coor_A="/a/random/path/prot.pdb";'
     # Note: Values may be quoted.
-    'parameter': r'\{===>}\s*' + re_string('name') + r'\s*=\s*' + re_string('value') + r'\s*;'
-                 r'\s*(!#level\s*=\s*' + re_string('accesslevel') + r')?',
+    'parameter': r'\{===>}\s*' + re_string('name') + r'\s*=\s*' + re_string('value') + r'\s*;',
 
     # Match 'numhis=5;'
     # These parameters are not saved to the model
@@ -335,16 +334,21 @@ class CNSParser(object):
             'hidden':  False if 'hidden' not in self.current_metadata else self.current_metadata['hidden'],
         }
 
-        self.install_common_metadata(component)
-
-        if 'datatype' not in component:
+        if 'datatype' in self.current_metadata:
+            component['datatype'] = self.current_metadata['datatype']
+            if component['datatype'] == 'choice':
+                component['options'] = self.current_metadata['options']
+        else:
             # No datatype was specified, make a guess based on the default value
             if re.search('^\d+$', component['default']):
-                component['datatype'] = 'int'
+                component['datatype'] = 'integer'
             elif re.search('^[0-9.]+$', component['default']):
                 component['datatype'] = 'float'
             else:
                 component['datatype'] = 'text'
+
+
+        self.install_common_metadata(component)
 
         if len(self.current_paragraph):
             component['label'] = self.current_paragraph
