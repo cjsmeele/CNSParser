@@ -245,7 +245,6 @@ class CNSParser(object):
 
         # Install repeat data and do some checks
         for key, value in self.current_attributes.items():
-            # Save repeat attributes
             if key in set(['repeat', 'repeat-index', 'repeat-min', 'repeat-max']):
                 component[key] = value
 
@@ -278,7 +277,9 @@ class CNSParser(object):
         component = {
             'label':     label,
             'type':     'section',
-            'children': []
+            'children':  [], # 'children' is basically a template.
+            'instances': [], # This is where actual values will be set by the interface.
+                             # For non-repeatable sections, there is of course only one instance.
         }
         self.install_common_attributes(component)
 
