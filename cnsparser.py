@@ -71,7 +71,7 @@ class CNSParser(object):
 
     def __init__(self, source=sys.stdin, verbose=False, warnings=False, fatal_warnings=False):
         """\
-        source must be iteratable, contents are parsed line-by-line
+        Source must be iteratable, contents are parsed line-by-line.
         """
         self.verbose        = verbose
         self.warnings       = warnings or fatal_warnings
@@ -230,34 +230,39 @@ class CNSParser(object):
         # Use provided attributes if available
         component['accesslevels'] = self.squash_accesslevels(
             inherited     = inherited_accesslevels,
-            minimum_index = None if 'accesslevel-index-min' not in self.current_attributes
-                                 else self.current_attributes['accesslevel-index-min'],
+            minimum_index = None if 'accesslevel_index_min' not in self.current_attributes
+                                 else self.current_attributes['accesslevel_index_min'],
 
-            maximum_index = None if 'accesslevel-index-max' not in self.current_attributes
-                                 else self.current_attributes['accesslevel-index-max'],
+            maximum_index = None if 'accesslevel_index_max' not in self.current_attributes
+                                 else self.current_attributes['accesslevel_index_max'],
 
-            includes      = set() if 'accesslevel-includes' not in self.current_attributes
-                                  else self.current_attributes['accesslevel-includes'],
+            includes      = set() if 'accesslevel_includes' not in self.current_attributes
+                                  else self.current_attributes['accesslevel_includes'],
 
-            excludes      = set() if 'accesslevel-excludes' not in self.current_attributes
-                                  else self.current_attributes['accesslevel-excludes'],
+            excludes      = set() if 'accesslevel_excludes' not in self.current_attributes
+                                  else self.current_attributes['accesslevel_excludes'],
         )
 
         # Install repeat data and do some checks
         for key, value in self.current_attributes.items():
-            if key in set(['repeat', 'repeat-index', 'repeat-min', 'repeat-max']):
+            if key in set(['repeat', 'repeat_index', 'repeat_min', 'repeat_max']):
                 component[key] = value
 
         if 'repeat' in component and component['repeat']:
-            if 'repeat-index' not in component:
+            if 'repeat_index' not in component:
                 self.error('Component set to repeat but no repeat-index defined')
+            if 'repeat_min' not in component:
+                component['repeat_min'] = 0;
+            if 'repeat_max' not in component:
+                component['repeat_max'] = None;
+
             if len(self.current_sections):
                 for section in self.current_sections:
                     # We can't do this check during attribute definition because
                     # at that time we don't know if the attribute is for a section
                     # on a higher nesting level.
-                    if section['component']['repeat'] and section['component']['repeat-index'] == component['repeat-index']:
-                        self.error('Cannot reuse repeat-index of parent section: "' + component['repeat-index'] + '"')
+                    if section['component']['repeat'] and section['component']['repeat_index'] == component['repeat_index']:
+                        self.error('Cannot reuse repeat-index of parent section: "' + component['repeat_index'] + '"')
         else:
             component['repeat'] = False
 
@@ -375,37 +380,37 @@ class CNSParser(object):
                 if value not in self.accesslevel_names:
                     self.error('Unknown access level specified: "' + value + '"');
 
-                if 'accesslevel-includes' not in self.current_attributes:
-                    self.current_attributes['accesslevel-includes'] = set()
-                if 'accesslevel-excludes' not in self.current_attributes:
-                    self.current_attributes['accesslevel-excludes'] = set()
+                if 'accesslevel_includes' not in self.current_attributes:
+                    self.current_attributes['accesslevel_includes'] = set()
+                if 'accesslevel_excludes' not in self.current_attributes:
+                    self.current_attributes['accesslevel_excludes'] = set()
 
             if key == 'level-min':
                 if (
-                        'accesslevel-index-max' in self.current_attributes
-                        and self.accesslevel_names.index(value) > self.current_attributes['accesslevel-index-max']
+                        'accesslevel_index_max' in self.current_attributes
+                        and self.accesslevel_names.index(value) > self.current_attributes['accesslevel_index_max']
                     ):
                     self.error(
                         'Specified minimum level is higher than the current maximum level ('
-                        + self.accesslevel_names[self.current_attributes['accesslevel-index-max']] + ')'
+                        + self.accesslevel_names[self.current_attributes['accesslevel_index_max']] + ')'
                     )
-                self.current_attributes['accesslevel-index-min'] = self.accesslevel_names.index(value)
+                self.current_attributes['accesslevel_index_min'] = self.accesslevel_names.index(value)
 
             elif key == 'level-max':
                 if (
-                        'accesslevel-index-min' in self.current_attributes
-                        and self.accesslevel_names.index(value) < self.current_attributes['accesslevel-index-min']
+                        'accesslevel_index_min' in self.current_attributes
+                        and self.accesslevel_names.index(value) < self.current_attributes['accesslevel_index_min']
                     ):
                     self.error('Specified maximum level is lower than the current minimum level')
-                self.current_attributes['accesslevel-index-max'] = self.accesslevel_names.index(value)
+                self.current_attributes['accesslevel_index_max'] = self.accesslevel_names.index(value)
 
             elif key == 'level-include':
-                self.current_attributes['accesslevel-excludes'].discard(value)
-                self.current_attributes['accesslevel-includes'].add(value)
+                self.current_attributes['accesslevel_excludes'].discard(value)
+                self.current_attributes['accesslevel_includes'].add(value)
 
             elif key == 'level-exclude':
-                self.current_attributes['accesslevel-includes'].discard(value)
-                self.current_attributes['accesslevel-excludes'].add(value)
+                self.current_attributes['accesslevel_includes'].discard(value)
+                self.current_attributes['accesslevel_excludes'].add(value)
 
             elif key == 'hidden':
                 self.current_attributes['hidden'] = True
@@ -413,7 +418,7 @@ class CNSParser(object):
             elif key == 'multi-index':
                 self.current_attributes.update({
                     'repeat': True,
-                    'repeat-index': value,
+                    'repeat_index': value,
                 })
             elif key == 'multi-min':
                 self.current_attributes.update({ 'repeat': True, 'repeat_min': value })
