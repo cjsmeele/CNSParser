@@ -351,7 +351,7 @@ class CNSParser(object):
             elif re.search('^[0-9.]+$', component['default']):
                 component['datatype'] = 'float'
             else:
-                component['datatype'] = 'text'
+                component['datatype'] = 'string'
 
 
         self.install_common_attributes(component)
