@@ -461,6 +461,30 @@ class CNSParser(object):
         self.open_section(label, len(args['indentation']))
         # Blocks are closed automatically
 
+    def save_paragraph(self, paragraph):
+        if len(self.current_sections):
+            inherited_accesslevels = self.current_sections[-1]['component']['accesslevels']
+        else:
+            inherited_accesslevels = None
+
+        component = {
+            'type': 'paragraph',
+            'text': self.current_paragraph
+        }
+
+        # Paragraphs always inherit their parent access levels.
+        # If you need a paragraph with different access levels, consider
+        # adding a section for it.
+        component['accesslevels'] = self.squash_accesslevels(
+            inherited     = inherited_accesslevels,
+            minimum_index = None,
+            maximum_index = None,
+            includes      = set(),
+            excludes      = set(),
+        )
+
+        self.append_component(component)
+
     def postprocess(self, section):
         """\
         Hides sections with no visible children.
@@ -479,7 +503,6 @@ class CNSParser(object):
 
         section['hidden'] = children_hidden
 
-
     def parse(self):
         self.current_attributes = {} # Data type, etc.
         self.current_paragraph  = {} # Documentation or parameter labels
@@ -492,10 +515,7 @@ class CNSParser(object):
             line = line.rstrip()
             if not len(line):
                 if len(self.current_paragraph):
-                    self.append_component({
-                        'type': 'paragraph',
-                        'text': self.current_paragraph
-                    })
+                    self.save_paragraph(self.current_paragraph)
                     self.current_paragraph = ""
                 continue
             for pattern, function in self.pattern_handlers:
