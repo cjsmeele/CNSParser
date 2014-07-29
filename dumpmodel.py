@@ -5,7 +5,6 @@ import argparse
 import json
 import sys
 
-
 def dump(component, depth=0):
     def indent(depth, string=''):
         return ('|' + ' '*2)*depth + string
@@ -18,7 +17,7 @@ def dump(component, depth=0):
             print('(' + component['datatype'] + ') ', end='')
         print(component['name'] + ' = "' + component['default'] + '"', end='')
     elif component['type'] == 'section':
-        print()
+        print(indent(depth))
         print(indent(depth, component['label']))
         print(indent(depth, ('=' if depth == 0 else '-')*len(component['label'])), end='')
     elif component['type'] == 'paragraph':
@@ -47,7 +46,6 @@ def dump(component, depth=0):
             dump(child, depth+1)
 
 argparser = argparse.ArgumentParser(description='Dump a CNS model structure')
-
 argparser.add_argument(
     'source', metavar='MODEL',
     type    = argparse.FileType('r'),
@@ -55,7 +53,6 @@ argparser.add_argument(
     nargs   = '?',
     help    = 'A model JSON file'
 )
-
 args = argparser.parse_args()
 
 model = json.load(args.source)
