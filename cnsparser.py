@@ -252,7 +252,7 @@ class CNSParser(object):
             if 'repeat_index' not in component:
                 self.error('Component set to repeat but no repeat-index defined')
             if 'repeat_min' not in component:
-                component['repeat_min'] = 0;
+                component['repeat_min'] = 1;
             if 'repeat_max' not in component:
                 component['repeat_max'] = None;
 
