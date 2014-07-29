@@ -1,0 +1,64 @@
+#!/usr/bin/env python
+
+from __future__ import print_function
+import argparse
+import json
+import sys
+
+
+def dump(component, depth=0):
+    def indent(depth, string=''):
+        return ('|' + ' '*2)*depth + string
+
+    if component['type'] == 'parameter':
+        print(indent(depth), end='')
+        if component['datatype'] == 'choice':
+            print('(' + component['datatype'] + '<' + ','.join(component['options']) + '>) ', end='')
+        else:
+            print('(' + component['datatype'] + ') ', end='')
+        print(component['name'] + ' = "' + component['default'] + '"', end='')
+    elif component['type'] == 'section':
+        print()
+        print(indent(depth, component['label']))
+        print(indent(depth, ('=' if depth == 0 else '-')*len(component['label'])), end='')
+    elif component['type'] == 'paragraph':
+        print(indent(depth))
+        lines = component['text'].split('\n')
+        for line in lines:
+            print(indent(depth, line))
+        print(indent(depth))
+        return
+    else:
+        return
+
+    if 'repeat' in component and component['repeat']:
+        if component['repeat_min'] == component['repeat_max']:
+            repeat_string = 'x' + str(component['repeat_min'])
+        elif component['repeat_max'] < 0:
+            repeat_string = 'x ' + str(component['repeat_min']) + '+'
+        else:
+            repeat_string = 'x ' + str(component['repeat_min']) + '-' + str(component['repeat_max'])
+        print(' ' + repeat_string)
+    else:
+        print()
+
+    if component['type'] == 'section':
+        for child in component['children']:
+            dump(child, depth+1)
+
+argparser = argparse.ArgumentParser(description='Dump a CNS model structure')
+
+argparser.add_argument(
+    'source', metavar='MODEL',
+    type    = argparse.FileType('r'),
+    default = sys.stdin,
+    nargs   = '?',
+    help    = 'A model JSON file'
+)
+
+args = argparser.parse_args()
+
+model = json.load(args.source)
+
+for component in model:
+    dump(component)
