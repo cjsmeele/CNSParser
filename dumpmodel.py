@@ -40,9 +40,12 @@ def dump(component, depth=0, verbose=False):
         print(' ' + repeat_string, end='')
 
     if verbose and 'accesslevels' in component and len(component['accesslevels']):
-        print(' [' + ', '.join(sorted(component['accesslevels'])) + ']')
-    else:
-        print()
+        print(' [' + ', '.join(sorted(component['accesslevels'])) + ']', end='')
+
+    if component['hidden']:
+        print(' (hidden)', end='')
+
+    print()
 
     if component['type'] == 'section':
         for child in component['children']:

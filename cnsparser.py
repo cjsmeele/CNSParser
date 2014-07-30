@@ -266,6 +266,15 @@ class CNSParser(object):
         else:
             component['repeat'] = False
 
+        if 'hidden' in self.current_attributes and self.current_attributes['hidden']:
+            component['hidden'] = True
+        elif len(self.current_sections):
+            # Inherit the 'hidden' attribute
+            component['hidden'] = self.current_sections[-1]['component']['hidden']
+        else:
+            component['hidden'] = False
+
+
         self.current_attributes = {}
 
     def open_section(self, label, level):
@@ -337,7 +346,6 @@ class CNSParser(object):
             'name':    args['name'],
             'default': args['value'],
             'type':    'parameter',
-            'hidden':  False if 'hidden' not in self.current_attributes else self.current_attributes['hidden'],
         }
 
         if 'datatype' in self.current_attributes:

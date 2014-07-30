@@ -191,14 +191,14 @@ This attribute is optional. When no type is specified, CNSParser tries
 to deduce it from the default value, or sets it to 'choice' when a `{+
 choice +}` line was found (see below).
 
-#### hidden
-
-This valueless attribute can be used to define parameters that should
-not be included in an interface.
-
 
 Additionally, the following attributes can be used on parameters as well
 as sections:
+
+#### hidden
+
+This valueless attribute can be used to define parameters or sections
+that should not be included in an interface.
 
 #### multi-index
 
@@ -338,9 +338,6 @@ To be compatible with CNS however, at least 4 equals signs should be
 used on both sides of the section header.
 
 ### Notes on access level inheritance
-
-The list of allowed access levels is the only attribute that can be
-inherited by sections and parameters.
 
 When specifying the allowed access levels for a section or parameter,
 there are four attributes that can be given:
