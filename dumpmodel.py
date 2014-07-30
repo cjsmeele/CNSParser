@@ -33,7 +33,7 @@ def dump(component, depth=0, verbose=False):
     if 'repeat' in component and component['repeat']:
         if component['repeat_min'] == component['repeat_max']:
             repeat_string = 'x' + str(component['repeat_min'])
-        elif component['repeat_max'] < 0:
+        elif component['repeat_max'] == None:
             repeat_string = 'x ' + str(component['repeat_min']) + '+'
         else:
             repeat_string = 'x ' + str(component['repeat_min']) + '-' + str(component['repeat_max'])
