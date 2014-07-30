@@ -5,7 +5,7 @@ import argparse
 import json
 import sys
 
-def dump(component, depth=0):
+def dump(component, depth=0, verbose=False):
     def indent(depth, string=''):
         return ('|' + ' '*2)*depth + string
 
@@ -37,13 +37,16 @@ def dump(component, depth=0):
             repeat_string = 'x ' + str(component['repeat_min']) + '+'
         else:
             repeat_string = 'x ' + str(component['repeat_min']) + '-' + str(component['repeat_max'])
-        print(' ' + repeat_string)
+        print(' ' + repeat_string, end='')
+
+    if verbose and 'accesslevels' in component and len(component['accesslevels']):
+        print(' [' + ', '.join(sorted(component['accesslevels'])) + ']')
     else:
         print()
 
     if component['type'] == 'section':
         for child in component['children']:
-            dump(child, depth+1)
+            dump(child, depth=depth+1, verbose=verbose)
 
 argparser = argparse.ArgumentParser(description='Dump a CNS model structure')
 argparser.add_argument(
@@ -53,9 +56,16 @@ argparser.add_argument(
     nargs   = '?',
     help    = 'A model JSON file'
 )
+argparser.add_argument(
+    '-v', '--verbose',
+    dest    = 'verbose',
+    action  = 'store_true',
+    default = False,
+    help    = 'show access levels for each component'
+)
 args = argparser.parse_args()
 
 model = json.load(args.source)
 
 for component in model:
-    dump(component)
+    dump(component, verbose=args.verbose)
