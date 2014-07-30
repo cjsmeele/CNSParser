@@ -239,9 +239,18 @@ Specifies the minimum number of repetitions. Interfaces should show this
 much parameters / section by default, and allow the user to add more
 themselves (if multi-max allows it).
 
+When no multi-min value is specified for a repeatable parameter or
+block, it defaults to 1.
+
+Note that 0 is a valid minimum. This makes a parameter or section
+optional.
+
 #### multi-max
 
-Specifies the maximum number of repetitions for a parameter or section
+Specifies the maximum number of repetitions for a parameter or section.
+
+When no multi-max value is specified for a repeatable parameter or
+block, it defaults to -1, which means no limit.
 
 #### level-min
 
