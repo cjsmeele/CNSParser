@@ -251,20 +251,31 @@ class CNSParser(object):
         if 'repeat' in component and component['repeat']:
             if 'repeat_index' not in component:
                 self.error('Component set to repeat but no repeat-index defined')
+            if component['type'] == 'parameter' and component['name'].find(component['repeat_index']) == -1:
+                self.error('Name of repeatable parameter does not contain the specified repeat-index placeholder "'
+                    + component['repeat_index'] + '"')
             if 'repeat_min' not in component:
                 component['repeat_min'] = 1;
             if 'repeat_max' not in component:
                 component['repeat_max'] = None;
-
-            if len(self.current_sections):
-                for section in self.current_sections:
-                    # We can't do this check during attribute definition because
-                    # at that time we don't know if the attribute is for a section
-                    # on a higher nesting level.
-                    if section['component']['repeat'] and section['component']['repeat_index'] == component['repeat_index']:
-                        self.error('Cannot reuse repeat-index of parent section: "' + component['repeat_index'] + '"')
         else:
             component['repeat'] = False
+
+        if len(self.current_sections):
+            for section in self.current_sections:
+                # We can't do this check during attribute definition because
+                # at that time we don't know if the attribute is for a section
+                # on a higher nesting level.
+                if component['repeat']:
+                    if section['component']['repeat'] and section['component']['repeat_index'] == component['repeat_index']:
+                        self.error('Cannot reuse repeat-index of parent section: "' + component['repeat_index'] + '"')
+
+                if (
+                        component['type'] == 'parameter'
+                        and section['component']['repeat'] and component['name'].find(section['component']['repeat_index']) == -1
+                    ):
+                    self.error('Parameter name does not contain parent repeat-index placeholder "'
+                        + section['component']['repeat_index'] + '"')
 
         if 'hidden' in self.current_attributes and self.current_attributes['hidden']:
             component['hidden'] = True
