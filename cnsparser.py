@@ -435,6 +435,8 @@ class CNSParser(object):
                 self.current_attributes['hidden'] = True
 
             elif key == 'multi-index':
+                if 'repeat_index' in self.current_attributes:
+                    self.error('Repeat-index specified twice for the same component')
                 self.current_attributes.update({
                     'repeat': True,
                     'repeat_index': value,
@@ -570,4 +572,6 @@ class CNSParser(object):
 
     def write(parameters):
         # TODO
+        # Do something similar to the parse routine, but replace things
+        # Easy stuff
         pass
