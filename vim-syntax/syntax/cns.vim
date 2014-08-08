@@ -29,9 +29,9 @@ syn match  cnsAttribute      "#[a-zA-Z_-]\+\([=:]\S\+\)\="   contained contains=
 syn match  cnsAttributeName  "#\@<=[a-zA-Z_-]\+"             contained
 syn match  cnsAttributeValue "\(#[a-zA-Z_-]\+[=:]\)\@<=\S\+" contained contains=cnsString,cnsNumber
 
-syn match  cnsAssignment "\(^\(\s*{===>}\s*\)\=\)[a-zA-Z0-9_]\+\s*=\s*\S.*;" contains=cnsParameter,cnsValue
-syn match  cnsParameter  "\(^\(\s*{===>}\s*\)\=\)\@<=[a-zA-Z0-9_]\+" contained
-syn match  cnsValue      "\(^\(\s*{===>}\s*\)\=[a-zA-Z0-9_]\+\s*=\s*\)\@<=.*\(;\)\@=" contained contains=cnsString,cnsNumber
+syn match  cnsAssignment "\(^\s*\({===>}\s*\)\=\)[a-zA-Z0-9_]\+\s*=\s*\S.*;" contains=cnsParameter,cnsValue
+syn match  cnsParameter  "\(^\s*\({===>}\s*\)\=\)\@<=[a-zA-Z0-9_]\+" contained
+syn match  cnsValue      "\(^\s*\({===>}\s*\)\=[a-zA-Z0-9_]\+\s*=\s*\)\@<=.*\(;\)\@=" contained contains=cnsString,cnsNumber
 
 syn region cnsString start="\"" end="\"" contained
 syn match  cnsNumber "\<\d\+\>"          contained
