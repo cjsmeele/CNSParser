@@ -303,8 +303,6 @@ class CNSParser(object):
             'label':     label,
             'type':     'section',
             'children':  [], # 'children' is basically a template.
-            'instances': [], # This is where actual values will be set by the interface.
-                             # For non-repeatable sections, there is of course only one instance.
         }
         self.install_common_attributes(component)
 
