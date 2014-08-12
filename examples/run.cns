@@ -1,0 +1,1257 @@
+!$Revision: 2.1 $
+!$Date: 2010/02/10 16:03:34 $
+!$RCSfile: run.cns-linux,v $
+
+
+module(
+iteration;
+filenames;
+data;
+iterations;
+saprotocol;
+refine;
+toppar; 
+analysis;
+)
+
+{+ File: run.cns +}
+{+ Description: this file contains all necessary information to run HADDOCK. +}
+
+{+ Authors: Alexandre Bonvin<br>
+Version: 2.3, May, 2013 <br><br>
+Initially adapted from ARIA of Nilges and Linge +}
+
+! Please cite the following references when using this protocol: 
+{+ reference: Cyril Dominguez, Rolf Boelens and Alexandre M.J.J. Bonvin (2003).  HADDOCK: a protein-protein docking approach 
+based on biochemical and/or biophysical information. <i>J. Am. Chem. Soc.</i> <b>125</b>, 1731-1737.
+<p>
+<b>When using <i>residual dipolar couplings</i> in HADDOCK cite in addition:</b><p>
+<LI>A.D.J. van Dijk, D. Fushman and A.M.J.J. Bonvin (2005). Various strategies of using residual dipolar 
+couplings in NMR-driven protein docking: Application to Lys48-linked di-ubiquitin and validation against 
+15N-relaxation data. <EM>Proteins: Struc. Funct. & Bioinformatics</EM>, <STRONG>60</STRONG>, 367-381.</li>
+<p>
+<b>When using <i>diffusion anisotropy data</i> in HADDOCK cite in addition:</b><p>
+<li>A.D.J. van Dijk, R. Kaptein, R. Boelens and A.M.J.J. Bonvin (2006). Combining NMR relaxation with 
+chemical shift perturbation data to drive protein-protein docking. <EM>J. Biomol. NMR</EM>, 
+<STRONG>34</STRONG>, 237-244.</li>
+<p>
+<b>When using <i>solvated docking</i> in HADDOCK cite in addition:</b><p>
+<li>A.D.J. van Dijk and A.M.J.J. Bonvin (2006). Solvated docking: introducing water into the modelling 
+of biomolecular complexes. <EM>Bioinformatics</EM>,  <STRONG>22</STRONG> 2340-2347.
+<p>
+<b>When performing <i>flexible protein-DNA docking</i> using HADDOCK cite in addition:</b><p>
+<li>M. van Dijk, A.D.J. van Dijk, V. Hsu, R. Boelens and  A.M.J.J. Bonvin (2006).
+Information-driven Protein-DNA Docking using HADDOCK: it is a matter of flexibility.
+<EM>Nucl. Acids Res.</EM>, <STRONG>34</STRONG> 3317-3325.</li>
++}
+
+{- Guidelines for using this file:
+   - all strings must be quoted by double-quotes
+   - logical variables (true/false) are not quoted
+   - do not remove any evaluate statements from the file
+   - pathnames should not exceed 80 characters -}
+{- begin block parameter definition -} define(
+
+! Access levels
+!             Name       Label
+{!accesslevel easy       "Easy"      }
+{!accesslevel prediction "Prediction"}
+{!accesslevel expert     "Expert"    }
+{!accesslevel refinement "Refinement"}
+{!accesslevel guru       "Guru"      }
+{!accesslevel multibody  "Multi-body"}
+
+
+! #hidden
+{==== File Locations ====}
+{*  the name of your current project *}
+{*  this will be used as name for the generated structures *}
+! #type=string #hidden
+{===>} fileroot="e2a-hpr"; 
+
+{* RUN directory *}
+{*  the absolute path of your current run, e.g. /home/haddock/run1*}
+! #type=string #hidden
+{===>} run_dir="/home/abonvin/software/haddock2.3/examples/e2a-hpr/run1"; 
+
+{* Logfile directory *}
+{* specify a directory for the large CNS log files *}
+! #hidden #type=string
+{===>} temptrash_dir="/home/abonvin/software/haddock2.3/examples/e2a-hpr/run1"; 
+
+{* HADDOCK directory *}
+{*  the absolute path of the HADDOCK program files *}
+! #hidden #type=string #new
+{===>} haddock_dir="/home/abonvin/software/haddock2.3"; 
+
+
+! #level-min=multibody
+{==== number of molecules for docking ==================}
+{* number of components *}
+! #type=integer
+{===>} ncomponents=2; 
+
+! #multi-index=NN #multi-min=2 #level-min=easy
+{==== Molecule Definition (NN) =========================}
+
+{* PDB file of molecule (protein) A *}
+! #type=file #level=easy
+{===>} prot_coor_NN="prot.pdb"; 
+{* PSF file of molecule (protein) A *}
+! #type=file #hidden
+{===>} prot_psf_NN="prot.psf"; 
+{* segid of molecule (protein) A *}
+! #type=string #level-min=guru
+{===>} prot_segid_NN="A"; 
+{* fileroot of molecule (protein) A *}
+! #type=string #hidden
+{===>} prot_root_NN="e2aP_1F3G"; 
+{* Molecular Type *}
+{+ choice: protein nucleic carbohydrate ligand +}
+! #level-min=easy
+{===>} moltype_NN=protein;
+
+{* Coarse grained molecule? *}
+{+ choice: true false +}
+! #level-min=expert
+{===>} cg_NN=false;
+{* coarse-grained topology file for molecule NN *}
+! #hidden #type=file
+{===>} prot_cg_top_NN="cg.top";
+{*coarse-grained linkage file for molecule NN *}
+! #hidden #type=file
+{===>} prot_cg_link_NN="cg.link";
+{* coarse-grained energy parameter file for molecule NN *}
+! #hidden #type=file
+{===>} prot_cg_par_NN="cg.par";
+
+
+
+{* Remove non-polar hydrogens? *}
+{+ choice: true false +}
+! #level-min=guru
+{===>} delenph_NN=true; 
+
+! #level-min=expert
+{======== histidine patches =====================}
+
+numhis=1;
+
+{* HISD for Molecule NN (removes HD1) *}
+! #type=integer #multi-index=AA
+{===>} NN_hisd_resid_AA=0; 
+
+{* HISE for Molecule NN (removes HE1) *}
+! #type=integer #multi-index=AA
+{===>} NN_hise_resid_AA=0;
+
+
+! #level-min=guru
+{======== Definition of semi-flexible interface ============}
+{* Define the interface of each molecule.*}
+{* Side-chains and backbone of these residues will be allowed to move during semi-flexible refinement*}
+{* number of semi-flexible segments for molecule (protein) A (-1 for automated mode) *}
+{* Note that current max is 10 (edit the run.cns to add more segments *}
+
+! #type=integer
+{===>} nseg_NN=-1; 
+
+! #multi-index=AA
+{========== Segment definition ==========}
+{* First residue of semi-flexbile segment AA of molecule (protein) NN *}
+{===>} NN_start_seg_AA="";
+{* Last residue of semi-flexbile segment AA of molecule (protein) NN *}
+{===>} NN_end_seg_AA=""; 
+
+! #level-min=guru
+{======== Definition of fully flexible segments ==========}
+{* Define the fully flexible segment of each molecule.*}
+{* These segments will be allowed to move at all stages of it1 *}
+
+{* Number of fully flexible segments for molecule (protein) NN            *}
+{* Note that current max is 5 (edit the run.cns to add more segments     *}
+! #type=integer
+{===>} nfle_NN=0; 
+
+! #multi-index=AA
+{========== Segment definition ==========}
+{* First residue of fully flexbile segment AA of molecule (protein) NN *}
+{===>} NN_start_fle_AA=""; 
+{* Last residue of fully flexbile segment AA of molecule (protein) NN *}
+{===>} NN_end_fle_AA=""; 
+
+! #level-min=guru
+{==== membrane positioning restraints  ==================}
+{* Do you want to use membrane positioning restraints ? *}
+{+ choice: true false +}
+{===>} zres_on=false; 
+
+{* Force constant for membrane positioning restraints ? *}
+! #type=float
+{===>} kzres=10.0;
+
+{* Maximum z value for membrane positioning restraints ? *}
+! #type=float
+{===>} zresmax=0.0;
+
+{* Minimum z value for membrane positioning restraints ? *}
+! #type=float
+{===>} zresmin=0.0;
+
+{* Number of membrane positioning restrained segments *}
+! #type=integer
+{===>} numzres=0;
+ 
+! #multi-index=NN #multi-min=0
+{====== Segment definition ======}
+{* First residue number of segment *}
+! #type=string
+{===>} zres_sta_NN="";
+! #type=string
+{* Last residue number of segment *}
+{===>} zres_end_NN="";
+! #type=string
+{* SEGID(chainID) of segment *}
+{===>} zres_seg_NN="";
+{* Restraint inside or outside the membrane *}
+{+ choice: inside outside +}
+{===>} zres_type_NN="";
+
+! #level-min=guru 
+{==== NCS restraints  =====================}
+{* Do you want to use NCS restraints? *}
+{+ choice: true false +}
+{===>} ncs_on=false; 
+
+{* Force constant for NCS restraints *}
+! #type=float
+{===>} kncs=1.0;
+
+{* Number of NCS pairs *}
+! #type=integer
+{===>} numncs=0;
+
+! #multi-index=AA #multi-min=0
+{====== NCS pair ======}
+{* Define the segments pairs for NCS restraints *}
+
+{* First residue number of component 1 *}
+{===>} ncs_sta1_AA="";
+{* Last residue number of component 1 *}
+{===>} ncs_end1_AA="";
+{* SEGID(chainID) of component 1 *}
+{===>} ncs_seg1_AA="";
+{* First residue number of component 2 *}
+{===>} ncs_sta2_AA="";
+{* Last residue number of component 2 *}
+{===>} ncs_end2_AA="";
+{* SEGID(chainID) of component 2 *}
+{===>} ncs_seg2_AA="";
+
+! #level-min=guru
+{==== Symmetry restraints  ==================}
+{* Do you want to use symmetry restraints ? *}
+{+ choice: true false +}
+{===>} sym_on=false; 
+
+{* Force constant for symmetry restraints ? *}
+! #type=float
+{===>} ksym=10.0;
+
+{* Number of C2 symmetry pairs *}
+! #type=integer
+{===>} numc2sym=0;
+
+{* Define the segment pairs C2 symmetry restraints *}
+{XXX ! #multi-index=NN }
+! #type=string #multi-index=AA
+{===>} c2sym_staAA_NN="";
+{===>} c2sym_endAA_NN="";
+{===>} c2sym_segAA_NN="";
+
+{* Number of C3 symmetry triples*}
+! #type=integer
+{===>} numc3sym=0;
+
+{XXX ! #multi-index=NN }
+{* Define the segment triples for C3 symmetry restraints *}
+! #multi-index=AA #multi-max=2
+{===>} c3sym_staAA_NN="";
+{===>} c3sym_endAA_NN="";
+{===>} c3sym_segAA_NN="";
+
+{* Number of S3 symmetry triples*}
+{===>} nums3sym=0;
+
+{* Define the segment triples for S3 symmetry restraints *}
+{XXX ! #multi-index=NN }
+! #multi-index=AA
+{===>} s3sym_staAA_NN="";
+{===>} s3sym_endAA_NN="";
+{===>} s3sym_segAA_NN="";
+
+{* Number of C4 symmetry quadruples *}
+{===>} numc4sym=0;
+
+{* Define the segment quadruples for C4 symmetry restraints *}
+{XXX ! #multi-index=NN }
+! #multi-index=AA
+{===>} c4sym_staAA_NN="";
+{===>} c4sym_endAA_NN="";
+{===>} c4sym_segAA_NN="";
+
+{* Number of C5 symmetry *}
+{===>} numc5sym=0;
+
+{* Define the segments for C5 symmetry restraints *}
+{XXX ! #multi-index=NN }
+! #multi-index=AA #multi-max=2
+{===>} c5sym_staAA_NN="";
+{===>} c5sym_endAA_NN="";
+{===>} c5sym_segAA_NN="";
+
+! #level-min=expert #level-exclude=refinement
+{==== Distance restraints  ========================}
+{* Turn on/off and energy constants for distance restraints *}
+{+ table: rows=3 "distances" "AIR (ambig)" "hbonds" cols=6 "firstIteration" "lastIteration" "hot" "cool1" "cool2" "cool3"+}
+
+{===>} unamb_firstit=0; 
+{===>} unamb_lastit=2; 
+{===>} unamb_hot=10; 
+{===>} unamb_cool1=10; 
+{===>} unamb_cool2=50; 
+{===>} unamb_cool3=50; 
+{===>} amb_firstit=0; 
+{===>} amb_lastit=2; 
+{===>} amb_hot=10; 
+{===>} amb_cool1=10; 
+{===>} amb_cool2=50; 
+{===>} amb_cool3=50; 
+{===>} hbond_firstit=1; 
+{===>} hbond_lastit=2; 
+{===>} hbond_hot=10; 
+{===>} hbond_cool1=10; 
+{===>} hbond_cool2=50; 
+{===>} hbond_cool3=50; 
+
+{* Do you want to randomly exclude a fraction of the ambiguous restraints (AIRs)? *}
+{+ choice: true false +}
+{===>} noecv=true;
+
+{* Number of partitions for random exclusion (%excluded=100/number of partitions)? *}
+{===>} ncvpart=2;
+
+{* Do you want to use hydrogen bond restraints? *}
+{+ choice: true false +}
+{===>} hbonds_on=false; 
+
+{* Do you want to define randomly ambiguous interaction restraints from accessible residues? *}
+{* Only residues in the defined flexible segments will be considered *}
+{* Note that this option is exclusive with any other distance restraints and only for it0    *}
+{+ choice: true false +}
+{===>} ranair=false;
+
+{* Do you want to define center of mass restraints to enforce contact between the molecules? *}
+{* Note that these are only active during it0 and it1 *}
+{+ choice: true false +}
+{===>} cmrest=false;
+
+{* Force constant for center of mass restraints *}
+{===>} kcont=1.0;
+
+{* Do you want to define surface contact restraints to enforce contact between the molecules? *}
+{* Note that these are only active during it0 and it1 *}
+{+ choice: true false +}
+{===>} surfrest=false;
+
+{* Force constant for surface contact restraints *}
+{===>} ksurf=1.0;
+
+{* Do you want to define a radius of gyration restraint (e.g. from SAXS)? *}
+{+ choice: true false +}
+{===>} rgrest=false;
+
+{* Radius of gyration *}
+{===>} rgtarg=17.78;
+
+{* Force constant for radius of gyration restraint *}
+{===>} krg_hot=100.0;
+{===>} krg_cool1=100.0;
+{===>} krg_cool2=100.0;
+{===>} krg_cool3=100.0;
+
+{* Atom selections for the radius of gyration restraint *}
+{===>} rgsele="all";
+
+{ Use automated distance restraints weighting }
+{ choice: true false }
+air_scaling=false; 
+
+{ Define the number of distance restraints for automated weighting }
+tot_unamb=25; 
+{ Define the number of AIR restraints for automated weighting }
+tot_amb=0; 
+
+{ potential shape }
+mrswi_hot=0.5; 
+mrswi_cool1=0.5; 
+mrswi_cool2=0.5; 
+mrswi_cool3=0.5; 
+rswi_hot=0.5; 
+rswi_cool1=0.5; 
+rswi_cool2=0.5; 
+rswi_cool3=0.5; 
+masy_hot=-1.0; 
+masy_cool1=-1.0; 
+masy_cool2=-0.1; 
+masy_cool3=-0.1; 
+asy_hot=1.0; 
+asy_cool1=1.0; 
+asy_cool2=0.1; 
+asy_cool3=0.1; 
+
+
+! #hidden
+{==== DNA-RNA restraints ============================}
+{* Use DNA/RNA restraints (dna-rna_restraints.def in data/sequence)? *}
+{+ choice: true false +}
+{===>} dnarest_on=false; 
+
+
+
+! #level-min=guru
+{==== dihedrals restraints ====================}
+{* energy constants *}
+{+ table: rows=1 "dihedrals" cols=5 "use?" "hot" "cool1" "cool2" "cool3" +}
+
+{+ choice: true false +}
+{===>} dihedrals_on=false; 
+{===>} dihedrals_hot=5; 
+{===>} dihedrals_cool1=5; 
+{===>} dihedrals_cool2=50; 
+{===>} dihedrals_cool3=200; 
+
+{* Automatically define backbone dihedral angle restraints from structure? *}
+{+ choice: none all alpha alpha-beta +}
+{===>} ssdihed=none;
+
+! #hidden
+{==== Karplus coupling restraints ====================}
+
+{* Karplus coefficients: edit manually the run.cns file to specify them if needed   *}
+{* The jcoupling restraint files should be present in the data/jcouplings directory *}
+{* and named c1.tbl, c2.tbl, ... *}
+
+ c1_on=false; 
+ c1_karplusa=6.98; 
+ c1_karplusb=-1.38; 
+ c1_karplusc=1.72; 
+ c1_karplusd=-60.0; 
+ c1_hot=0.0; 
+ c1_cool1=0.2; 
+ c1_cool2=1.0; 
+ c1_cool3=1.0; 
+
+ c2_on=false; 
+ c2_karplusa=6.98; 
+ c2_karplusb=-1.38; 
+ c2_karplusc=1.72; 
+ c2_karplusd=-120.0; 
+ c2_hot=0.0; 
+ c2_cool1=0.2; 
+ c2_cool2=1.0; 
+ c2_cool3=1.0; 
+
+ c3_on=false; 
+ c3_karplusa=6.98; 
+ c3_karplusb=-1.38; 
+ c3_karplusc=1.72; 
+ c3_karplusd=-120.0; 
+ c3_hot=0.0; 
+ c3_cool1=0.2; 
+ c3_cool2=1.0; 
+ c3_cool3=1.0; 
+
+ c4_on=false; 
+ c4_karplusa=6.98; 
+ c4_karplusb=-1.38; 
+ c4_karplusc=1.72; 
+ c4_karplusd=-120.0; 
+ c4_hot=0.0; 
+ c4_cool1=0.2; 
+ c4_cool2=1.0; 
+ c4_cool3=1.0; 
+
+ c5_on=false; 
+ c5_karplusa=6.98; 
+ c5_karplusb=-1.38; 
+ c5_karplusc=1.72; 
+ c5_karplusd=-120.0; 
+ c5_hot=0.0; 
+ c5_cool1=0.2; 
+ c5_cool2=1.0; 
+ c5_cool3=1.0; 
+ 
+! #level-min=guru
+{==== residual dipolar couplings ======================}
+
+{* Parameters *}
+{+ table: rows=5 "class1" "class2" "class3" "class4" "class5"
+          cols=25 "type" "firstIt" "lastIt" "Ksani<br>(hot)" "Ksani<br>(cool1)" "Ksani<br>(cool2)" "Ksani<br>(cool3)" "R" "D" 
+ "Kvean<br>(ini_bor_hot)" "Kvean<br>(fin_bor_hot)"
+ "Kvean<br>(ini_bor_cool1)" "Kvean<br>(fin_bor_cool1)" 
+ "Kvean<br>(ini_bor_cool2)" "Kvean<br>(fin_bor_cool2)" 
+ "Kvean<br>(ini_bor_cool3)" "Kvean<br>(fin_bor_cool3)" 
+ "Kvean<br>(ini_cen_hot)" "Kvean<br>(fin_cen_hot)" 
+ "Kvean<br>(ini_cen_cool1)" "Kvean<br>(fin_cen_cool1)" 
+ "Kvean<br>(ini_cen_cool2)" "Kvean<br>(fin_cen_cool2)" 
+ "Kvean<br>(ini_cen_cool3)" "Kvean<br>(fin_cen_cool3)"+}
+{+ choice: "NO" "SANI" "VANGLE" +}
+{===>} rdc1_choice="NO"; 
+{===>} rdc1_firstIt=2; 
+{===>} rdc1_lastIt=2; 
+{===>} rdc1_hot=0.001; 
+{===>} rdc1_cool1=0.02;
+{===>} rdc1_cool2=0.2; 
+{===>} rdc1_cool3=0.2; 
+{===>} rdc1_r=0.057; 
+{===>} rdc1_d=-11.49; 
+{===>} ini_bor_hot_1=1.0; 
+{===>} fin_bor_hot_1=10.0; 
+{===>} ini_bor_cool1_1=10.0; 
+{===>} fin_bor_cool1_1=40.0; 
+{===>} ini_bor_cool2_1=40.0; 
+{===>} fin_bor_cool2_1=40.0; 
+{===>} ini_bor_cool3_1=40.0; 
+{===>} fin_bor_cool3_1=40.0; 
+{===>} ini_cen_hot_1=0.25; 
+{===>} fin_cen_hot_1=2.5; 
+{===>} ini_cen_cool1_1=2.5; 
+{===>} fin_cen_cool1_1=10.0; 
+{===>} ini_cen_cool2_1=10.0; 
+{===>} fin_cen_cool2_1=10.0; 
+{===>} ini_cen_cool3_1=10.0; 
+{===>} fin_cen_cool3_1=10.0; 
+
+{+ choice: "NO" "SANI" "XRDC" "VANGLE" +}
+{===>} rdc2_choice="NO"; 
+{===>} rdc2_firstIt=0; 
+{===>} rdc2_lastIt=1; 
+{===>} rdc2_hot=0.01; 
+{===>} rdc2_cool1=0.2; 
+{===>} rdc2_cool2=1.0; 
+{===>} rdc2_cool3=1.0; 
+{===>} rdc2_r=0.4; 
+{===>} rdc2_d=8.0; 
+{===>} ini_bor_hot_2=1.0; 
+{===>} fin_bor_hot_2=10.0; 
+{===>} ini_bor_cool1_2=10.0; 
+{===>} fin_bor_cool1_2=40.0; 
+{===>} ini_bor_cool2_2=40.0; 
+{===>} fin_bor_cool2_2=40.0; 
+{===>} ini_bor_cool3_2=40.0; 
+{===>} fin_bor_cool3_2=40.0; 
+{===>} ini_cen_hot_2=0.25; 
+{===>} fin_cen_hot_2=2.5; 
+{===>} ini_cen_cool1_2=2.5; 
+{===>} fin_cen_cool1_2=10.0; 
+{===>} ini_cen_cool2_2=10.0; 
+{===>} fin_cen_cool2_2=10.0; 
+{===>} ini_cen_cool3_2=10.0; 
+{===>} fin_cen_cool3_2=10.0; 
+
+{+ choice: "NO" "SANI" "XRDC" "VANGLE" +}
+{===>} rdc3_choice="NO"; 
+{===>} rdc3_firstIt=1; 
+{===>} rdc3_lastIt=1; 
+{===>} rdc3_hot=0.01; 
+{===>} rdc3_cool1=0.2; 
+{===>} rdc3_cool2=1.0; 
+{===>} rdc3_cool3=1.0; 
+{===>} rdc3_r=0.4; 
+{===>} rdc3_d=8.0; 
+{===>} ini_bor_hot_3=1.0; 
+{===>} fin_bor_hot_3=10.0; 
+{===>} ini_bor_cool1_3=10.0; 
+{===>} fin_bor_cool1_3=40.0; 
+{===>} ini_bor_cool2_3=40.0; 
+{===>} fin_bor_cool2_3=40.0; 
+{===>} ini_bor_cool3_3=40.0; 
+{===>} fin_bor_cool3_3=40.0; 
+{===>} ini_cen_hot_3=0.25; 
+{===>} fin_cen_hot_3=2.5; 
+{===>} ini_cen_cool1_3=2.5; 
+{===>} fin_cen_cool1_3=10.0; 
+{===>} ini_cen_cool2_3=10.0; 
+{===>} fin_cen_cool2_3=10.0; 
+{===>} ini_cen_cool3_3=10.0; 
+{===>} fin_cen_cool3_3=10.0; 
+
+{+ choice: "NO" "SANI" "XRDC" "VANGLE" +}
+{===>} rdc4_choice="NO"; 
+{===>} rdc4_firstIt=0; 
+{===>} rdc4_lastIt=2; 
+{===>} rdc4_hot=0.1; 
+{===>} rdc4_cool1=1.0; 
+{===>} rdc4_cool2=1.0; 
+{===>} rdc4_cool3=1.0; 
+{===>} rdc4_r=0.4; 
+{===>} rdc4_d=8.0; 
+{===>} ini_bor_hot_4=1.0; 
+{===>} fin_bor_hot_4=10.0; 
+{===>} ini_bor_cool1_4=10.0; 
+{===>} fin_bor_cool1_4=40.0; 
+{===>} ini_bor_cool2_4=40.0; 
+{===>} fin_bor_cool2_4=40.0; 
+{===>} ini_bor_cool3_4=40.0; 
+{===>} fin_bor_cool3_4=40.0; 
+{===>} ini_cen_hot_4=0.25; 
+{===>} fin_cen_hot_4=2.5; 
+{===>} ini_cen_cool1_4=2.5; 
+{===>} fin_cen_cool1_4=10.0; 
+{===>} ini_cen_cool2_4=10.0; 
+{===>} fin_cen_cool2_4=10.0; 
+{===>} ini_cen_cool3_4=10.0; 
+{===>} fin_cen_cool3_4=10.0; 
+
+{+ choice: "NO" "SANI" "XRDC" "VANGLE" +}
+{===>} rdc5_choice="NO"; 
+{===>} rdc5_firstIt=0; 
+{===>} rdc5_lastIt=2; 
+{===>} rdc5_hot=0.1; 
+{===>} rdc5_cool1=1.0; 
+{===>} rdc5_cool2=1.0; 
+{===>} rdc5_cool3=1.0; 
+{===>} rdc5_r=0.4; 
+{===>} rdc5_d=8.0; 
+{===>} ini_bor_hot_5=1.0; 
+{===>} fin_bor_hot_5=10.0; 
+{===>} ini_bor_cool1_5=10.0; 
+{===>} fin_bor_cool1_5=40.0; 
+{===>} ini_bor_cool2_5=40.0; 
+{===>} fin_bor_cool2_5=40.0; 
+{===>} ini_bor_cool3_5=40.0; 
+{===>} fin_bor_cool3_5=40.0; 
+{===>} ini_cen_hot_5=0.25; 
+{===>} fin_cen_hot_5=2.5; 
+{===>} ini_cen_cool1_5=2.5; 
+{===>} fin_cen_cool1_5=10.0; 
+{===>} ini_cen_cool2_5=10.0; 
+{===>} fin_cen_cool2_5=10.0; 
+{===>} ini_cen_cool3_5=10.0; 
+{===>} fin_cen_cool3_5=10.0; 
+
+! #level-min=guru 
+{==== pseudo contact shifts ===========================}
+
+{* Parameters *}
+{+ table: rows=10 "class1" "class2" "class3" "class4" "class5" "class6" "class7" "class8" "class9" "class10"
+          cols=9 "type" "firstIt" "lastIt" "Kpcs<br>(hot)" "Kpcs<br>(cool1)" "Kpcs<br>(cool2)" "Kpcs<br>(cool3)" "R" "D" +}
+{+ choice: "NO" "XPCS" +}
+{===>} pcs1_choice="NO";
+{===>} pcs1_firstIt=0;
+{===>} pcs1_lastIt=2;
+{===>} pcs1_hot=100.0;
+{===>} pcs1_cool1=100.0;
+{===>} pcs1_cool2=100.0;
+{===>} pcs1_cool3=100.0;
+{===>} pcs1_r=1000;
+{===>} pcs1_d=10000;
+
+{+ choice: "NO" "XPCS" +}
+{===>} pcs2_choice="NO"; 
+{===>} pcs2_firstIt=0; 
+{===>} pcs2_lastIt=2; 
+{===>} pcs2_hot=100.0; 
+{===>} pcs2_cool1=100.0; 
+{===>} pcs2_cool2=100.0; 
+{===>} pcs2_cool3=100.0; 
+{===>} pcs2_r=1000; 
+{===>} pcs2_d=10000; 
+
+{+ choice: "NO" "XPCS" +}
+{===>} pcs3_choice="NO"; 
+{===>} pcs3_firstIt=0; 
+{===>} pcs3_lastIt=2; 
+{===>} pcs3_hot=100.0; 
+{===>} pcs3_cool1=100.0;
+{===>} pcs3_cool2=100.0; 
+{===>} pcs3_cool3=100.0; 
+{===>} pcs3_r=1000;
+{===>} pcs3_d=10000;  
+
+{+ choice: "NO" "XPCS" +}
+{===>} pcs4_choice="NO"; 
+{===>} pcs4_firstIt=0; 
+{===>} pcs4_lastIt=2; 
+{===>} pcs4_hot=100.0; 
+{===>} pcs4_cool1=100.0; 
+{===>} pcs4_cool2=100.0; 
+{===>} pcs4_cool3=100.0; 
+{===>} pcs4_r=1000; 
+{===>} pcs4_d=10000; 
+
+{+ choice: "NO" "XPCS" +}
+{===>} pcs5_choice="NO"; 
+{===>} pcs5_firstIt=0; 
+{===>} pcs5_lastIt=2; 
+{===>} pcs5_hot=100.0; 
+{===>} pcs5_cool1=100.0; 
+{===>} pcs5_cool2=100.0; 
+{===>} pcs5_cool3=100.0; 
+{===>} pcs5_r=1000;
+{===>} pcs5_d=10000; 
+
+{+ choice: "NO" "XPCS" +}
+{===>} pcs6_choice="NO"; 
+{===>} pcs6_firstIt=0; 
+{===>} pcs6_lastIt=2; 
+{===>} pcs6_hot=100.0; 
+{===>} pcs6_cool1=100.0; 
+{===>} pcs6_cool2=100.0; 
+{===>} pcs6_cool3=100.0; 
+{===>} pcs6_r=1000; 
+{===>} pcs6_d=10000; 
+
+{+ choice: "NO" "XPCS" +}
+{===>} pcs7_choice="NO"; 
+{===>} pcs7_firstIt=0; 
+{===>} pcs7_lastIt=2; 
+{===>} pcs7_hot=100.0; 
+{===>} pcs7_cool1=100.0; 
+{===>} pcs7_cool2=100.0; 
+{===>} pcs7_cool3=100.0; 
+{===>} pcs7_r=1000; 
+{===>} pcs7_d=10000; 
+
+{+ choice: "NO" "XPCS" +}
+{===>} pcs8_choice="NO"; 
+{===>} pcs8_firstIt=0; 
+{===>} pcs8_lastIt=2; 
+{===>} pcs8_hot=100.0; 
+{===>} pcs8_cool1=100.0; 
+{===>} pcs8_cool2=100.0; 
+{===>} pcs8_cool3=100.0; 
+{===>} pcs8_r=1000; 
+{===>} pcs8_d=10000; 
+
+{+ choice: "NO" "XPCS" +}
+{===>} pcs9_choice="NO"; 
+{===>} pcs9_firstIt=0; 
+{===>} pcs9_lastIt=2; 
+{===>} pcs9_hot=100.0; 
+{===>} pcs9_cool1=100.0; 
+{===>} pcs9_cool2=100.0; 
+{===>} pcs9_cool3=100.0; 
+{===>} pcs9_r=1000; 
+{===>} pcs9_d=10000; 
+
+
+{+ choice: "NO" "XPCS" +}
+{===>} pcsA_choice="NO"; 
+{===>} pcsA_firstIt=0; 
+{===>} pcsA_lastIt=2; 
+{===>} pcsA_hot=100.0; 
+{===>} pcsA_cool1=100.0; 
+{===>} pcsA_cool2=100.0; 
+{===>} pcsA_cool3=100.0; 
+{===>} pcsA_r=1000; 
+{===>} pcsA_d=10000; 
+
+! #level-min=guru
+{==== relaxation data ======================}
+{* Parameters *}
+{+ table: rows=5 "class1" "class2" "class3" "class4" "class5"
+          cols=12 "type" "firstIt" "lastIt" "Kdani(hot)" "Kdani(cool1)" "Kdani(cool2)" "Kdani(cool3)" "Correlation time" "D" "R" "H frequency" "N frequency" +}
+{+ choice: "NO" "DANI" +}
+{===>} dan1_choice="NO"; 
+{===>} dan1_firstIt=0; 
+{===>} dan1_lastIt=2; 
+{===>} dan1_hot=1; 
+{===>} dan1_cool1=5;
+{===>} dan1_cool2=10;
+{===>} dan1_cool3=10; 
+{===>} dan1_tc=9.771;
+{===>} dan1_anis=1.557;
+{===>} dan1_r=0.455;
+{===>} dan1_wh=599.91; 
+{===>} dan1_wn=60.82; 
+
+{+ choice: "NO" "DANI" +}
+{===>} dan2_choice="NO"; 
+{===>} dan2_firstIt=0; 
+{===>} dan2_lastIt=1; 
+{===>} dan2_hot=1; 
+{===>} dan2_cool1=5; 
+{===>} dan2_cool2=10; 
+{===>} dan2_cool3=10; 
+{===>} dan2_tc=9.84; 
+{===>} dan2_anis=-1.35; 
+{===>} dan2_r=0.308; 
+{===>} dan2_wh=599.91; 
+{===>} dan2_wn=60.82; 
+
+{+ choice: "NO" "DANI" +}
+{===>} dan3_choice="NO"; 
+{===>} dan3_firstIt=1; 
+{===>} dan3_lastIt=1; 
+{===>} dan3_hot=1; 
+{===>} dan3_cool1=5; 
+{===>} dan3_cool2=10; 
+{===>} dan3_cool3=10; 
+{===>} dan3_tc=9.84; 
+{===>} dan3_anis=-1.35; 
+{===>} dan3_r=0.308; 
+{===>} dan3_wh=599.91; 
+{===>} dan3_wn=60.82; 
+
+{+ choice: "NO" "DANI" +}
+{===>} dan4_choice="NO"; 
+{===>} dan4_firstIt=0; 
+{===>} dan4_lastIt=2; 
+{===>} dan4_hot=1; 
+{===>} dan4_cool1=5; 
+{===>} dan4_cool2=10; 
+{===>} dan4_cool3=10; 
+{===>} dan4_tc=9.84; 
+{===>} dan4_anis=-1.35; 
+{===>} dan4_r=0.308; 
+{===>} dan4_wh=599.91; 
+{===>} dan4_wn=60.82; 
+
+{+ choice: "NO" "DANI" +}
+{===>} dan5_choice="NO"; 
+{===>} dan5_firstIt=0; 
+{===>} dan5_lastIt=2; 
+{===>} dan5_hot=1; 
+{===>} dan5_cool1=5; 
+{===>} dan5_cool2=10; 
+{===>} dan5_cool3=10; 
+{===>} dan5_tc=9.84; 
+{===>} dan5_anis=-1.35; 
+{===>} dan5_r=0.308; 
+{===>} dan5_wh=599.91; 
+{===>} dan5_wn=60.82; 
+
+! #hidden
+{==== topology and parameter files ======================}
+
+{* topology file for molecule (protein) A *}
+! #multi-index=NN #type=file
+{===>} prot_top_NN="protein-allhdg5-4.top"; 
+{* linkage file for molecule (protein) A *}
+{===>} prot_link_NN="protein-allhdg5-4.link"; 
+{* energy parameter file for molecule (protein) A *}
+{===>} prot_par_NN="protein-allhdg5-4.param"; 
+
+{* type of non-bonded parameters *}
+{* specify the type of non-bonded interaction *}
+{+ choice: "PROLSQ" "PARMALLH6" "PARALLHDG" "OPLSX" +}
+{===>} par_nonbonded="OPLSX"; 
+
+! #hidden
+{==== coarse graining topology and parameter files ==================}
+
+! #multi-index=NN
+{* topology file for molecule (protein) A *}
+{===>} prot_cg_top_NN="protein-CG-Martini.top"; 
+{* linkage file for molecule (protein) A *}
+{===>} prot_cg_link_NN="protein-CG-Martini.link"; 
+{* energy parameter file for molecule (protein) A *}
+{===>} prot_cg_par_NN="protein-CG-Martini.param"; 
+
+
+! #level-min=guru
+{==== energy and interaction parameters ==================}
+
+{ Do you want to include dihedral angle energy terms? }
+{ choice: true false }
+dihedflag=true; 
+
+{* Do you want to include the electrostatic energy term for docking? *}
+{* Note that it will be automatically included in the solvent refinement *}
+
+{* Include electrostatic during rigid body docking (it0)? *}
+{+ choice: true false +}
+{===>} elecflag_0=true; 
+{* Include electrostatic during semi-flexible SA (it1)? *}
+{+ choice: true false +}
+{===>} elecflag_1=true; 
+
+{* Give the epsilon constant for the electrostatic energy term? *}
+{* Note that for explicit solvent refinement cdie with epsilon=1 is used *}
+{===>} epsilon=10.0; 
+
+{* Use constant (cdie) or distance-dependent (rdie) dielectric? *}
+{+ choice: cdie rdie +}
+{===>} dielec=cdie;
+
+{* - *}
+
+{* Scaling of intermolecular interactions for rigid body EM*}
+{===>} inter_rigid=1.0;
+
+{* Scaling of intermolecular interactions for semi-flexible SA*}
+{+ table: rows=3 "Rigid body dynamic " "SA with flexible side-chains (cool2)" "SA with flexible backbone and side-chains (cool3)" 
+          cols=2 "Init value" "Final value" +}
+{===>} init_rigid=0.001;
+{===>} fin_rigid=0.001;
+{===>} init_cool2=0.001;
+{===>} fin_cool2=1.0;
+{===>} init_cool3=0.05;
+{===>} fin_cool3=1.0;
+
+{* Interaction matrix for non-bonded interactions*}
+{+ table: rows=6 "Mol 1" "Mol 2" "Mol 3" "Mol 4" "Mol 5" "Mol 6" 
+          cols=6 "Mol 1" "Mol 2" "Mol 3" "Mol 4" "Mol 5" "Mol 6" +}
+{XXX ! #multi-index=NN }
+! #multi-index=AA
+{===>} int_NN_AA=1.0;
+
+! #level-min=guru
+{==== Number of structures to dock =======================}
+{* Setting for the rigid-body (it0) and semi-flexible refiment (it1) *}
+
+{* number of structures for rigid body docking *}
+{===>} structures_0=1000; 
+       keepstruct_0=&structures_0;
+{* number of structures for refinement *}
+{===>} structures_1=200; 
+       keepstruct_1=&structures_1;
+       keepstruct_2=&structures_1;
+{* number of structures to be analysed*}
+{===>} anastruc_1=200; 
+       anastruc_0=&anastruc_1;
+       anastruc_2=&anastruc_1;
+
+{* - *}
+
+{* Sampling of symmetry related solutions                       *}
+
+{* Sample 180 degrees rotated solutions during rigid body EM?   *}
+{+ choice: true false +}
+{===>} rotate180_0=true;
+
+{* Sample 180 degrees rotated solutions during semi-flexible SA?*}
+{+ choice: true false +}
+{===>} rotate180_1=false;
+
+
+! #level-min=guru
+{==== DOCKING protocol =============================}
+{* Cross-dock all combinations in the ensembles of starting structures? *}
+{* Turn off this option if you only want to dock structure 1 of ensemble A *}
+{*   to structure 1 of ensemble B, structure 2 to structure 2, etc. *}
+{+ choice: true false +}
+{===>} crossdock=true;
+
+{* Randomize starting orientations? *}
+{+ choice: true false +}
+{===>} randorien=true;
+
+{* Perform initial rigid body minimisation? *}
+{+ choice: true false +}
+{===>} rigidmini=true;
+
+{* Allow translation in rigid body minimisation? *}
+{+ choice: true false +}
+{===>} rigidtrans=true;
+
+{* Number of trials for rigid body minimisation? *}
+{===>} ntrials=5;
+
+{* initial seed for random number generator *}
+{* change to get different initial velocities *}
+{===>} iniseed=917; 
+
+{* temperature for rigid body high temperature TAD *}
+{===>} tadhigh_t=2000; 
+
+{* initial temperature for rigid body first TAD cooling step *}
+{===>} tadinit1_t=2000; 
+
+{* final temperature after first cooling step *}
+{===>} tadfinal1_t=500; 
+
+{* initial temperature for second TAD cooling step with flexible side-chain at the inferface *}
+{===>} tadinit2_t=1000; 
+
+{* finale temperature after second cooling step *}
+{===>} tadfinal2_t=50; 
+
+{* initial temperature for third TAD cooling step with fully flexible interface *}
+{===>} tadinit3_t=1000; 
+
+{* finale temperature after third cooling step *}
+{===>} tadfinal3_t=50; 
+
+{* time step *}
+{===>} timestep=0.002; 
+{* factor for timestep in TAD *}
+{===>} tadfactor=8; 
+
+{* number of MD steps for rigid body high temperature TAD *}
+{===>} initiosteps=500; 
+
+{* number of MD steps during first rigid body cooling stage *}
+{===>} cool1_steps=500; 
+
+{* number of MD steps during second cooling stage with flexible side-chains at interface *}
+{===>} cool2_steps=1000; 
+
+{* number of MD steps during third cooling stage with fully flexible interface *}
+{===>} cool3_steps=1000; 
+
+
+! #level-min=guru
+{==== Solvated rigid body docking=======================}
+{* perform solvated docking ? *}
+{+ choice: true false +}
+{===>} waterdock=false;
+
+{* which method to use for solvating? *}
+{* db: database-based (recommended), restraints: for restrained solvating to amino-acid most often forming
+water mediated contacts and blank (""): for uniform waterlayer *}
+{+ choice: "db" "restraints" "" +}
+{===>} solvate_method="db";
+
+{* which propensity database to use? *}
+{* statistical: based on an analysis of water-mediated contacts in the PDB, kyte-doolittle: based on the Kyte-Doolittle hydrophobicity scalte *}
+{+ choice: "statistical" "kytedoolittle" +}
+{===>} db_method="statistical";
+
+{* initial cutoff for restraints solvating method *}
+{* all waters further away from a highly occuring water solvated residue will be removed in the generation 
+of the initial solvation shell *}
+{===>} water_restraint_initial=5.0;
+
+{* cutoff for restraints solvating method *}
+{* upper distance limit for defining distance restraints between water and amino-acids often found to be 
+involved in water-mediated contacts *}
+{===>} water_restraint_cutoff=5.0;
+
+{* force constant for restrainted solvating method *}
+{===>} water_restraint_scale=25.0;
+
+{* fraction of water to keep *}
+{* this is the fraction of all interface water after the initial rigid body docking that will be kept 
+(note that more waters might be removed if the interaction energy is unfavorable  *}
+{===>} water_tokeep=0.50;
+
+{* this is the fraction of interface water involving DNA phoshpates after the initial rigid body docking that will be kept 
+(note that more waters might be removed if the interaction energy is unfavorable  *}
+{===>} dnap_water_tokeep=0.75;
+
+{* random fraction to be added to the fraction of water to keep *}
+{===>} water_randfrac=0.0;
+
+{* water-protein surface-cutoff *}
+{* waters further away than this cutoff distance from any component of the complex will be removed *}
+{===>} water_surfcutoff=8.0;
+
+{* do some water analysis *}
+{+ choice: true false +}
+{===>} water_analysis=false;
+
+{* allows translation of water molecules during rigid-body docking, true or false: *}
+{+ choice: true false +}
+{===>} transwater=true;
+
+{* number of different initial solvation shells to generate *}
+{===>} waterensemble=1;
+
+
+! #level-min=guru
+{==== final explicit solvent refinement  ==================}
+{* Do you want to refine your docking models in explicit solvent? *}
+{+ choice: "yes" "no" +}
+{===>} firstwater="yes"; 
+
+{* Build explicit solvent shell? (Can be turned off the large molecules or when morphing CG to AA models) *}
+{* Only EM will then be performed                                                                         *}
+{+ choice: true false +}
+{===>} solvshell=true; 
+
+{* Which solvent do you want to use? *}
+{+ choice: "water" "dmso" +}
+{===>} solvent="water"; 
+
+{* number of structures for the explicit solvent refinement *}
+{* the n best structures will be refined                    *}
+{===>} waterrefine=200; 
+       structures_2=&waterrefine;
+
+{* number of steps for heating phase (100, 200, 300K)?      *}
+{===>} waterheatsteps=100;
+
+{* number of steps for 300K sampling phase?                 *}
+{===>} watersteps=1250;
+
+{* number of steps for cooling phase (300, 200, 100K)?      *}
+{===>} watercoolsteps=500;
+
+{* write additional PDB files including solvent ?           *}
+{+ choice: true false +}
+{===>} keepwater=false; 
+
+{ calculate explicit desolvation energy (note this will double the cpu requirements) }
+{ choice: true false }
+calcdesolv=false;
+
+
+! #level-min=guru
+{==== Scoring =================================}
+{* Settings for the scoring of the docking solutions *}
+
+{* Define the weights for the various terms for the sorting of structures (scoring) *}
+{+ table: rows=15 "Evdw" "Eelec" "Eair" "Erg" "Esani" "Exrdc" "Expcs" "Edani" "Evean" "Ecdih" "Esym" "Ezres" "BSA" "dEint" "Edesolv"
+          cols=3 "Rigid body EM" "semi-flexible SA" "Water refinement" +}
+{===>} w_vdw_0=0.01;
+{===>} w_vdw_1=1.0;
+{===>} w_vdw_2=1.0;
+
+{===>} w_elec_0=1.0;
+{===>} w_elec_1=1.0;
+{===>} w_elec_2=0.2;
+
+{===>} w_dist_0=0.01;
+{===>} w_dist_1=0.1;
+{===>} w_dist_2=0.1;
+
+{===>} w_rg_0=0.1;
+{===>} w_rg_1=1.0;
+{===>} w_rg_2=1.0;
+
+{===>} w_sani_0=0.1;
+{===>} w_sani_1=0.1;
+{===>} w_sani_2=0.1;
+
+{===>} w_xrdc_0=0.1;
+{===>} w_xrdc_1=0.1;
+{===>} w_xrdc_2=0.1;
+
+{===>} w_xpcs_0=0.1;
+{===>} w_xpcs_1=0.1;
+{===>} w_xpcs_2=0.1;
+
+{===>} w_dani_0=0.01;
+{===>} w_dani_1=0.1;
+{===>} w_dani_2=0.1;
+
+{===>} w_vean_0=0.1;
+{===>} w_vean_1=0.1;
+{===>} w_vean_2=0.1;
+
+{===>} w_cdih_0=0.0;
+{===>} w_cdih_1=0.0;
+{===>} w_cdih_2=0.0;
+
+{===>} w_sym_0=0.1;
+{===>} w_sym_1=0.1;
+{===>} w_sym_2=0.1;
+
+{===>} w_zres_0=0.1;
+{===>} w_zres_1=0.1;
+{===>} w_zres_2=0.1;
+
+{===>} w_bsa_0=-0.01;
+{===>} w_bsa_1=-0.01;
+{===>} w_bsa_2=0.0;
+
+{===>} w_deint_0=0.0;
+{===>} w_deint_1=0.0;
+{===>} w_deint_2=0.0;
+
+{===>} w_desolv_0=1.0;
+{===>} w_desolv_1=1.0;
+{===>} w_desolv_2=1.0;
+
+{* Perform smoothed-scoring selection for rigid-body docking solutions ? *}
+{+ choice: true false +}
+{===>} smoothing=false;
+
+{* It is possible to skip structures in the selection of structure in it0 *}
+{* Give for this the number of structures to skip: *}
+{===>} skip_struc=0;
+
+
+{==== analysis and clustering ==========================}
+{* Cutoff distance (proton-acceptor) to define an hydrogen bond? *}
+{===>} dist_hb=2.5;
+
+{* Cutoff distance (carbon-carbon) to define an hydrophobic contact? *}
+{===>} dist_nb=3.9;
+
+{* Clustering method (RMSD or Fraction of Common Contacts (FCC)) *}
+{+ choice: "RMSD" "FCC" +}
+{===>} clust_meth="FCC";
+
+{* RMSD cutoff for clustering? (Recommended values: RMSD 7.5, FCC 0.75) *}
+{===>} clust_cutoff=0.75;
+
+{* Minimum cluster size? *}
+{===>} clust_size=4;
+
+{* Chain-Agnostic Algorithm (used for FCC clustering in symmetrical complexes) *}
+{+ choice: "true" "false" +}
+{===>} fcc_ignc=false;
+
+! #hidden
+{==== final clean-up ===================================}
+{* Clean up the run directory after completion (only files for struct #1 are kept) ? *}
+{+ choice: true false +}
+{===>} cleanup=true;
+
+
+! #hidden
+{==== parallel jobs ===============================}
+{* How many nodes do you want to use in parallel? *}
+{* leave unused fields blank, make sure that the queues are actually running *}
+{+ table: rows=10 "1" "2" "3" "4" "5" "6" "7" "8" "9" "10"
+ cols=3 "queue command" "cns executable" "number of jobs" +}
+
+{===>} queue_1="ssub short";
+{===>} cns_exe_1="/home/software/science/cns/cns_solve_1.31-UU/intel-x86_64bit-linux/bin/cns";
+{===>} cpunumber_1=1000;
+
+{===>} queue_2=""; 
+{===>} cns_exe_2=""; 
+{===>} cpunumber_2=0; 
+
+{===>} queue_3=""; 
+{===>} cns_exe_3=""; 
+{===>} cpunumber_3=0; 
+
+{===>} queue_4=""; 
+{===>} cns_exe_4=""; 
+{===>} cpunumber_4=0; 
+
+{===>} queue_5=""; 
+{===>} cns_exe_5=""; 
+{===>} cpunumber_5=0; 
+
+{===>} queue_6=""; 
+{===>} cns_exe_6=""; 
+{===>} cpunumber_6=0; 
+
+{===>} queue_7=""; 
+{===>} cns_exe_7=""; 
+{===>} cpunumber_7=0; 
+
+{===>} queue_8=""; 
+{===>} cns_exe_8=""; 
+{===>} cpunumber_8=0; 
+
+{===>} queue_9=""; 
+{===>} cns_exe_9=""; 
+{===>} cpunumber_9=0; 
+
+{===>} queue_10=""; 
+{===>} cns_exe_10=""; 
+{===>} cpunumber_10=0; 
+
+{===========================================================================}
+{        things below this line do not normally need to be changed          }
+{===========================================================================}
+
+) {- end block parameter definition -}

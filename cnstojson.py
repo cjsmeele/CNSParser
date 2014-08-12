@@ -8,7 +8,7 @@ import json
 from cnsparser import CNSParser
 
 parser = argparse.ArgumentParser(
-    description='Convert a run.cns file to a YAML model description',
+    description='Convert a run.cns file to a JSON model description',
     epilog=
         'If both output files have the same filename or both point to stdout, '
         'the access levels and model information will be printed as a nested '
