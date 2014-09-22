@@ -380,7 +380,7 @@ For reference, see the function `squash_accesslevels()` in cnsparser.py.
 EXAMPLES
 --------
 
-_TODO_
+See the `examples/` directory.
 
 SEE ALSO
 --------
