@@ -49,7 +49,8 @@ parser_patterns = {
     'hash_attributes': r'^\s*![^#]*(?P<attributes>(?:#[a-zA-Z0-9_-]+(?:\s*[=:]\s*' + re_string() + r')?)+)\s*$',
 
     # Match '{+ choice: protein nucleic carbohydrate ligand +}'
-    'plus_attributes': r'\{\+\s*(?P<key>[^:]+?)\s*:\s*(?P<value>.+?)\s*\+}',
+    #'plus_attributes': r'\{\+\s*(?P<key>[^:]+?)\s*:\s*(?P<value>.+?)\s*\+}',
+    'plus_attributes': r'\{\+\s*(?P<key>choice)\s*:\s*(?P<value>.+?)\s*\+}',
 
     # Match '{== Molecular Definition NN ==}'
     # Note: The amount of equals signs signify depth, allowing for nested sections.
@@ -64,7 +65,7 @@ parser_patterns = {
     'blockcomment': r'\{\s*(?P<text>[^}]*?)\s*\}',
 }
 
-class ParserException(StandardError):
+class ParserException(Exception):
     pass
 
 class CNSParser(object):
@@ -92,31 +93,40 @@ class CNSParser(object):
         # and add or replace pattern handlers in your __init__ function.
         self.pattern_handlers = [
             (
+                'accesslevel',
                 parser_patterns['accesslevel'],
                 self.handle_accesslevel
             ), (
+                'parameter',
                 parser_patterns['parameter'],
                 self.handle_parameter
             ), (
+                'static_parameter',
                 parser_patterns['static_parameter'],
                 None
             ), (
+                'paragraph',
                 parser_patterns['paragraph'],
                 self.handle_paragraph
             ), (
+                'hash_attributes',
                 parser_patterns['hash_attributes'],
                 self.handle_hash_attributes
             ), (
+                'plus_attributes',
                 parser_patterns['plus_attributes'],
                 self.handle_plus_attributes
             ), (
+                'section_start',
                 parser_patterns['section_start'],
                 self.handle_head
             ), (
                 # Regular comments must be recognized to avoid warnings.
+                'linecomment',
                 parser_patterns['linecomment'],
                 None
             ), (
+                'blockcomment',
                 parser_patterns['blockcomment'],
                 None
             ),
@@ -127,7 +137,7 @@ class CNSParser(object):
         Print a warning if warnings are turned on.
         Throws a ParserException if fatal warnings are turned on.
 
-        This method should only be called in parse() context.
+        This method should only be called in parse() or write() context.
         """
         if self.warnings:
             if self.fatal_warnings:
@@ -140,7 +150,7 @@ class CNSParser(object):
         """\
         Throws a ParserException.
 
-        This method should only be called in parse() context.
+        This method should only be called in parse() or write() context.
         """
         raise ParserException('Error on line ' + str(self.line_no) + ': ' + text)
 
@@ -329,6 +339,8 @@ class CNSParser(object):
         else:
             self.current_sections[-1]['component']['children'].append(component)
 
+    # Pattern handlers {{{
+
     def handle_accesslevel(self, args):
         """\
         Add an access level.
@@ -480,6 +492,8 @@ class CNSParser(object):
         self.open_section(label, len(args['indentation']))
         # Blocks are closed automatically
 
+    # }}}
+
     def save_paragraph(self, paragraph):
         if len(self.current_sections):
             inherited_accesslevels = self.current_sections[-1]['component']['accesslevels']
@@ -506,7 +520,8 @@ class CNSParser(object):
 
     def postprocess(self, section):
         """\
-        Hides sections with no visible children.
+        Hides sections with no visible children in the model description.
+        To be called at the end of the parse() function.
         """
         children_hidden = True
 
@@ -522,39 +537,36 @@ class CNSParser(object):
 
         section['hidden'] = children_hidden
 
-    def parse(self):
+    def call_handlers(self, line):
+        """\
+        Tries to call the handler function for the given line.
+        If the function was found and called, returns the name of the matched pattern.
+        Returns None otherwise.
+        """
+        for name, pattern, function in self.pattern_handlers:
+            match = re.search(pattern, line)
+            if match:
+                if function is not None:
+                    # Create an args dictionary based on named capture groups
+                    # in the regex match. Filter out quote captures.
+                    args = dict(
+                        (key, value) for (key, value) in match.groupdict().iteritems()
+                            if not re.match('^quote\d+$', key)
+                    )
+                    args['_line'] = line
+                    function(args)
+                return name
+        return None
+
+    def parse_start(self):
+        # These properties are used by pattern handler functions.
         self.current_attributes = {} # Data type, etc.
         self.current_paragraph  = {} # Documentation or parameter labels
         self.current_sections   = [] # Contains pointers to actual section components, used for switching between levels
         self.accesslevel_names  = [] # Used for inexpensive parameter access level validation
         self.line_no            = 0
 
-        for line in self.source:
-            self.line_no += 1
-            line = line.rstrip()
-            if not len(line):
-                if len(self.current_paragraph):
-                    self.save_paragraph(self.current_paragraph)
-                    self.current_paragraph = ""
-                continue
-            for pattern, function in self.pattern_handlers:
-                match = re.search(pattern, line)
-                if match:
-                    if function is not None:
-                        # Create an args dictionary based on named capture groups
-                        # in the regex match. Filter out quote captures.
-                        args = dict(
-                            (key, value) for (key, value) in match.groupdict().iteritems()
-                                if not re.match('^quote\d+$', key)
-                        )
-                        function(args)
-                    break
-            if not match:
-                self.warn('Could not parse line "' + line + '"')
-                # Assume that the current paragraph (on the line before this
-                # one) describes this unparsable line, drop it.
-                self.current_paragraph = ""
-
+    def parse_end(self):
         # Clean up
         del self.line_no
         del self.accesslevel_names
@@ -562,14 +574,104 @@ class CNSParser(object):
         del self.current_paragraph
         del self.current_attributes
 
+    def parse(self):
+        """\
+        Loops through the CNS source file and fills in a model description.
+        Returns the accesslevels and components structures.
+        """
+        self.parse_start()
+
+        # FIXME: Parsing should start after the '- begin block parameter definition -' line
+
+        for line in self.source:
+            self.line_no += 1
+            line = line.rstrip()
+            if len(line):
+                if self.call_handlers(line) is None:
+                    self.warn('Could not parse line "' + line + '"')
+                    # Assume that the current paragraph (on the line before this
+                    # one) describes this unparsable line, drop it.
+                    self.current_paragraph = ''
+            else:
+                if len(self.current_paragraph):
+                    self.save_paragraph(self.current_paragraph)
+                    self.current_paragraph = ''
+                continue
+
+        self.parse_end()
+
         for component in self.components:
             if component['type'] == 'section':
                 self.postprocess(component)
 
         return self.accesslevels, self.components
 
-    def write(parameters):
-        # TODO
-        # Do something similar to the parse routine, but replace things
-        # Easy stuff
-        pass
+    def write(self, form_data, aux_file_root):
+        """\
+        Generate a new CNS file based on the supplied CNS source file (used as
+        a template) and a form_data structure which describes filled in parameters.
+        Returns a new CNS file as a list of lines, and a map for renaming auxiliary files.
+        """
+        cns          = []
+        aux_file_map = []
+
+        self.parse_start()
+
+        # Order between attributes and labels in front of parameter lines is not preserved.
+        # Attributes always come before the label in our output. This shouldn't have any consequences.
+        current_paragraph_lines = []
+        current_attr_lines      = []
+
+        for line in self.source:
+            # TODO Save state and jump back and forth in the file for section repetitions, and start filling things in
+            self.line_no += 1
+
+            # TODO: This kills trailing spaces in our output, check if this is a problem.
+            line = line.rstrip()
+            if len(line):
+                line_type = self.call_handlers(line)
+
+                if line_type is None:
+                    self.warn('Could not parse line "' + line + '"')
+                    self.current_paragraph = ''
+                    # Output saved paragraph lines even though they're not saved as a component.
+                    cns.extend(current_paragraph_lines)
+                    current_paragraph_lines = []
+                    #cns.append('')
+                    cns.append(line)
+
+                elif line_type == 'section_start':
+                    cns.extend(current_attr_lines)
+                    cns.append(line)
+                    current_attr_lines = []
+
+                elif line_type == 'parameter':
+                    cns.extend(current_attr_lines)
+                    cns.extend(current_paragraph_lines)
+                    current_paragraph_lines = []
+                    cns.append(line)
+                    current_attr_lines = []
+
+                elif line_type == 'hash_attributes' or line_type == 'plus_attributes':
+                    current_attr_lines.append(line)
+
+                elif line_type == 'paragraph':
+                    current_paragraph_lines.append(line)
+
+                else:
+                    cns.append(line)
+            else:
+                if len(self.current_paragraph):
+                    cns.extend(current_paragraph_lines)
+                    current_paragraph_lines = []
+                    self.save_paragraph(self.current_paragraph)
+                    self.current_paragraph = ''
+
+                cns.append('')
+                continue
+
+        self.parse_end()
+
+        # TODO: Fill aux_file_map
+
+        return cns, aux_file_map
