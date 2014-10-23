@@ -789,9 +789,15 @@ class CNSParser(object):
             if len(it['repetitions']):
                 instance = it['repetitions'][it['repetition']][it['child_index']]
 
-                # FIXME: These should NOT be assertions. Print a regular error message instead.
-                # Checks whether the current component index number matches with the next component number in form_data.
-                assert instance['component_index'] == self.component_index
+                # Check whether the current component index number matches with the next component number in form_data.
+                if instance['component_index'] != self.component_index:
+                    self.error(
+                        'Missing or incorrect section instance in form data.'
+                        + ' Expected component index ' + str(self.component_index)
+                        + ' but found index ' + str(instance['component_index']) + ' instead'
+                    )
+
+                # This would indicate a bug in the parser.
                 assert components[self.component_index]['type'] == 'section'
 
             else:
@@ -918,6 +924,17 @@ class CNSParser(object):
                             if len(it['repetitions']):
                                 # Yes. Get this parameter's instance from the current section repetition.
                                 instance = it['repetitions'][it['repetition']][it['child_index']]
+
+                                # Check whether the current component index number matches with the next component number in form_data.
+                                if instance['component_index'] != self.component_index:
+                                    self.error(
+                                        'Missing or incorrect parameter instance in form data.'
+                                        + ' Expected component index ' + str(self.component_index)
+                                        + ' but found index ' + str(instance['component_index']) + ' instead'
+                                    )
+
+                                # This would indicate a bug in the parser.
+                                assert components[self.component_index]['type'] == 'parameter'
 
                                 # Check if the repetition count is within the allowed bounds.
                                 if component['repeat']:
