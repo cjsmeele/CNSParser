@@ -957,7 +957,14 @@ class CNSParser(object):
                             cns.extend(current_attr_lines)
                             cns.extend(current_paragraph_lines)
 
-                            cns.append(line)
+                            new_line = re.sub(
+                                r'(?<=\{===>\})\s*([a-zA-Z0-9_]+)(?==[^;]*?;)',
+                                lambda match: ' ' + replace_repetition_placeholders(match.group(1)),
+                                line
+                            )
+
+                            cns.append(new_line)
+
                             current_paragraph_lines = []
                             current_attr_lines = []
 
@@ -1005,25 +1012,32 @@ class CNSParser(object):
                                         + component['name'] + '", only one allowed'
                                     )
 
-                                for repetition in instance['repetitions']:
+                                for repetition_index, repetition in enumerate(instance['repetitions']):
                                     cns.extend(current_attr_lines)
+                                    cns.extend(current_paragraph_lines)
 
-                                    label_lines = copy.copy(current_paragraph_lines)
-                                    for label_line in label_lines:
-                                        cns.append(label_line)
-
-                                    rep_line = line
+                                    new_line = line
 
                                     # FIXME: Check datatypes.
 
                                     # Is the parameter value in the template enclosed by quotes?
-                                    if re.search(r'(?<=(?<!\{|=)=)(["' + '\'' + r'])[^;]*?\1(?=;)', rep_line) is not None:
+                                    if re.search(r'(?<=(?<!\{|=)=)(["' + '\'' + r'])[^;]*?\1(?=;)', new_line) is not None:
                                         # Always output double quotes.
-                                        rep_line = re.sub(r'(?<=(?<!\{|=)=)[^;]*?(?=;)', '"' + str(repetition) + '"', rep_line)
+                                        new_line = re.sub(r'(?<=(?<!\{|=)=)[^;]*?(?=;)', '"' + str(repetition) + '"', new_line)
                                     else:
-                                        rep_line = re.sub(r'(?<=(?<!\{|=)=)[^;]*?(?=;)', str(repetition), rep_line)
+                                        new_line = re.sub(r'(?<=(?<!\{|=)=)[^;]*?(?=;)', str(repetition), new_line)
 
-                                    cns.append(rep_line)
+                                    new_line = re.sub(
+                                        r'(?<=\{===>\})\s*([a-zA-Z0-9_]+)(?==[^;]*?;)',
+                                        lambda match: ' ' + (
+                                            replace_repetition_placeholders(match.group(1), self.component_index, repetition_index)
+                                                if component['repeat']
+                                                else replace_repetition_placeholders(match.group(1))
+                                        ),
+                                        new_line
+                                    )
+
+                                    cns.append(new_line)
 
                         current_paragraph_lines = []
                         current_attr_lines = []
@@ -1034,7 +1048,7 @@ class CNSParser(object):
 
                 elif line_type == 'paragraph':
                     # A paragraph can be a component as well, but we don't yet know if this is actually a label.
-                    current_paragraph_lines.append(line)
+                    current_paragraph_lines.append(replace_repetition_placeholders(line))
 
                 elif line_type == 'hash_attributes' or line_type == 'plus_attributes':
                     current_attr_lines.append(line)
