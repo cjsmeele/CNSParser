@@ -966,11 +966,16 @@ class CNSParser(object):
                                     for label_line in label_lines:
                                         cns.append(label_line)
 
-                                    # FIXME: Double quotes around the value in the CNS source will be
-                                    #        dropped by this substitution.
-                                    #        Check whether we need to re-add them.
                                     rep_line = line
-                                    rep_line = re.sub(r'(?<=(?<!\{|=)=)[^;]*?(?=;)', str(repetition), rep_line)
+
+                                    # FIXME: Check datatypes.
+
+                                    # Is the parameter value in the template enclosed by quotes?
+                                    if re.search(r'(?<=(?<!\{|=)=)(["' + '\'' + r'])[^;]*?\1(?=;)', rep_line) is not None:
+                                        # Always output double quotes.
+                                        rep_line = re.sub(r'(?<=(?<!\{|=)=)[^;]*?(?=;)', '"' + str(repetition) + '"', rep_line)
+                                    else:
+                                        rep_line = re.sub(r'(?<=(?<!\{|=)=)[^;]*?(?=;)', str(repetition), rep_line)
 
                                     cns.append(rep_line)
 
