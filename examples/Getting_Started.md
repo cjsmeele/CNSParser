@@ -37,7 +37,7 @@ enables all warnings, which can reveal unrecognized syntax, unlabeled
 parameters, and section/parameter attributes that don't seem to make
 sense.
 
-HADDOCK-WebUI expects both JSON files to be stored in its `res/`
+HADDOCK-WebUI expects both JSON files to be stored in its `model/`
 directory. If caching is enabled in `config.py`, the `mtime` of these
 files are checked on each request to detect changes to the model.
 
