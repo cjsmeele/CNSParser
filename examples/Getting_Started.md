@@ -71,7 +71,7 @@ With the HADDOCK-WebUI application running, go to the webserver in your
 web browser.
 
 The web application will be running at
-`http://<server-address>:<port>;/form`.
+`http://<server-address>:<port>/form`.
 
 You can add `?nocache` to the end of the URL to force a client-side
 cache refresh.
