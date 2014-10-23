@@ -728,6 +728,28 @@ class CNSParser(object):
             }
         ]
 
+        def replace_repetition_placeholders(string, parameter_component_index=None, parameter_repetition=None, zero_based=False):
+            """\
+            Replace occurrences of repetition index number placeholders with repeat indices.
+
+            If parameter_repetition is not None, the current parameter component
+            will be selected from section_its[] and its placeholder will be replaced as well.
+            """
+
+            # Apply substitutions from outermost to innermost section.
+            if len(section_its) > 1:
+                for it in section_its[1:]:
+                    section_component = components[it['component_index']]
+                    if section_component['repeat']:
+                        string = re.sub(section_component['repeat_index'], str(it['repetition'] if zero_based else it['repetition'] + 1), string)
+
+            # Apply substitutions for the current parameter.
+            if parameter_component_index is not None:
+                parameter_component = components[parameter_component_index]
+                string = re.sub(parameter_component['repeat_index'], str(parameter_repetition if zero_based else parameter_repetition + 1), string)
+
+            return string
+
         def on_section_boundary(at_eof=False):
             """\
             Called when a new section is opened and at end-of-file.
@@ -915,7 +937,8 @@ class CNSParser(object):
                         if on_section_boundary():
                             # Never output section attributes.
                             #cns.extend(current_attr_lines)
-                            cns.append(line)
+                            new_line = replace_repetition_placeholders(line)
+                            cns.append(new_line)
 
                         current_attr_lines = []
 
