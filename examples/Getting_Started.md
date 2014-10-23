@@ -63,6 +63,43 @@ For running the application under apache, make sure the WSGI module is
 installed and loaded, and use the vhost template config under
 `resources/` (in HADDOCK-WebUI's directory) to set up your vhost.
 
+
+Filling in a new run.cns using the web form
+-------------------------------------------
+
+With the HADDOCK-WebUI application running, go to the webserver in your
+web browser.
+
+The web application will be running at
+`http://<server-address>:<port>;/form`.
+
+You can add `?nocache` to the end of the URL to force a client-side
+cache refresh.
+
+The form page allows you to fill in parameter values, to add and remove
+sections and values, and to upload files. Fill in the required
+information and press `Submit` at the bottom of the page.
+
+When the Submit button is pressed, the form will submit all filled in
+information to the server in JSON format. The web-application will do
+very basic validation and may reject the form, in which case an error
+message will be sent back to the client.
+
+If the form passes validation on the web-application level,
+HADDOCK-WebUI creates a job directory in the directory specified in its
+configuration. The uploaded JSON data as well as all uploaded files
+(with temporary names) will be stored in this directory.
+
+The script used for converting the form data back into a run.cns file is
+currently not run automatically. To do this manually, run the following
+command from the CNSParser directory:
+
+    ./jsontocns.py -t template.cns job_directory
+
+Where `template.cns` is the same file used for generating the JSON
+model, and `job_directory` is the new job directory created by
+HADDOCK-WebUI.
+
 Debugging
 ---------
 
@@ -74,6 +111,8 @@ used in a pipeline:
 
     ./dumpmodel.py model.json
     ./cnstojson.py -l /dev/null run.cns | ./dumpmodel.py
+
+Add the `--verbose` flag to dumpmodel.py to get more information.
 
 Additionally, the output of cnstojson.py (with warnings enabled) should
 be checked for warnings.
