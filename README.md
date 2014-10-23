@@ -8,14 +8,13 @@ cnsparser - Translate CNS files into Python datastructures
 
 cnstojson - Generate a JSON model description based on parsed CNS data
 
-jsontocns - Rewrite a CNS file with modified sections and parameter
-values
+jsontocns - Rewrite a CNS file with modified sections and parameter values
 
 SYNOPSIS
 --------
 
     cnstojson.py -o model.json run.cns
-    jsontocns.py -o run.cns template.cns model.json
+    jsontocns.py -t template.cns job_directory
 
 DESCRIPTION
 -----------
@@ -296,8 +295,8 @@ with inp2form).
 #### Tables
 
 We believe the data model should not have anything to do with the
-representation. Therefore table attributes are not supported by the
-parser and will generate a warning when warnings are turned on.
+presentation in the user interface. Therefore table attributes are not
+supported by the parse.
 
 Another reason for this decision is the fact that our [primary interface
 implementation](https://github.com/csmeele/HADDOCK-WebUI) does not
