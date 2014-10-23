@@ -5,27 +5,34 @@ import argparse
 import json
 import sys
 
-def dump(component, depth=0, verbose=False):
+
+# component_index_static being an array is a hack to get function-static variables in python.
+def dump(component, depth=0, verbose=False, component_index_static=[0]):
+    """\
+    Dump a component and its children if its a section.
+    """
     def indent(depth, string=''):
         return ('|' + ' '*2)*depth + string
 
     if component['type'] == 'parameter':
-        print(indent(depth), end='')
+        print(indent(depth) + '#' + str(component_index_static[0]) + ' ', end='')
         if component['datatype'] == 'choice':
             print('(' + component['datatype'] + '<' + ','.join(component['options']) + '>) ', end='')
         else:
             print('(' + component['datatype'] + ') ', end='')
         print(component['name'] + ' = "' + component['default'] + '"', end='')
     elif component['type'] == 'section':
+        header_text = '#' + str(component_index_static[0]) + ' ' + component['label']
         print(indent(depth))
-        print(indent(depth, component['label']))
-        print(indent(depth, ('=' if depth == 0 else '-')*len(component['label'])), end='')
+        print(indent(depth, header_text))
+        print(indent(depth, ('=' if depth == 0 else '-')*len(header_text)), end='')
     elif component['type'] == 'paragraph':
         print(indent(depth))
         lines = component['text'].split('\n')
         for line in lines:
             print(indent(depth, line))
         print(indent(depth))
+        component_index_static[0] += 1
         return
     else:
         return
@@ -46,6 +53,8 @@ def dump(component, depth=0, verbose=False):
         print(' (hidden)', end='')
 
     print()
+
+    component_index_static[0] += 1
 
     if component['type'] == 'section':
         for child in component['children']:
