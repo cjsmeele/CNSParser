@@ -3,6 +3,7 @@
 from __future__ import print_function
 import sys
 import re
+import copy
 
 
 def re_string(name="", quote_id=[0]):
@@ -17,6 +18,7 @@ def re_string(name="", quote_id=[0]):
     """
     quote_id[0] += 1
     quote_name = 'quote' + str(quote_id[0]);
+
     return (
           r'\s*(?P<' + quote_name + r'>["' '\'' r'])?'            # Opening quote
         + ((r'(?P<' + name + r'>') if name else r'(?:')           # Start string capture
@@ -46,7 +48,7 @@ parser_patterns = {
 
     # Match '! #multi-index=AA #type=integer'
     # Note: This format allows for actual comments before the first hash sign
-    'hash_attributes': r'^\s*![^#]*(?P<attributes>(?:#[a-zA-Z0-9_-]+(?:\s*[=:]\s*' + re_string() + r')?)+)\s*$',
+    'hash_attributes': r'^\s*![^#]*(?P<attributes>(?:#[a-zA-Z0-9_-]+(?:\s*[=:]\s*' + re_string() + r')?\s*)+)\s*$',
 
     # Match '{+ choice: protein nucleic carbohydrate ligand +}'
     #'plus_attributes': r'\{\+\s*(?P<key>[^:]+?)\s*:\s*(?P<value>.+?)\s*\+}',
@@ -78,8 +80,6 @@ class CNSParser(object):
         self.warnings       = warnings or fatal_warnings
         self.fatal_warnings = fatal_warnings
         self.source         = source
-        self.accesslevels   = []
-        self.components     = []
 
         # Maps regular expressions to handler functions.
         # The contents of named capture groups can be retrieved by the handler
@@ -312,7 +312,7 @@ class CNSParser(object):
         component = {
             'label':     label,
             'type':     'section',
-            'children':  [], # 'children' is basically a template.
+            'children':  [],
         }
         self.install_common_attributes(component)
 
@@ -334,9 +334,13 @@ class CNSParser(object):
             })
 
     def append_component(self, component):
+        """\
+        Add a component to the component tree.
+        """
         if not len(self.current_sections) or not len(self.components):
             self.components.append(component)
         else:
+            # Add the component to the last / deepest section if it exists.
             self.current_sections[-1]['component']['children'].append(component)
 
     # Pattern handlers {{{
@@ -452,20 +456,19 @@ class CNSParser(object):
                     'repeat_index': value,
                 })
             elif key == 'multi-min':
-                self.current_attributes.update({ 'repeat': True, 'repeat_min': value })
+                self.current_attributes.update({ 'repeat': True, 'repeat_min': int(value) })
             elif key == 'multi-max':
-                self.current_attributes.update({ 'repeat': True, 'repeat_max': value })
+                self.current_attributes.update({ 'repeat': True, 'repeat_max': int(value) })
             elif key == 'type':
                 self.current_attributes.update({ 'datatype': value })
             else:
                 self.warn('Unknown hash_attributes key "' + key + '"')
-
-        # TODO: Loop through value-less settings
+                # TODO: Add it to current_attributes anyway.
 
     def handle_plus_attributes(self, args):
-        # The only known uses for this attribute format are choice and table definitions
+        # The only known uses for this attribute format are choice and table definitions.
         if args['key'] == 'choice':
-            # Filter out enclosing quotation marks
+            # Filter out enclosing quotation marks.
             values = [ re.sub(r'^(["|'+'\''+r'])(.*)\1$', r'\2', value) for value in args['value'].split() ]
 
             self.current_attributes.update({
@@ -474,7 +477,7 @@ class CNSParser(object):
             })
             self.printv('Saving attributes for next parameter: datatype = choice, options = \'' + args['value'] + '\'')
         elif args['key'] == 'table':
-            # Rendering and formatting is not our responsibility
+            # Rendering and formatting is not our responsibility.
             pass
         else:
             self.warn('Unknown plus_attributes key "' + args['key'] + '"')
@@ -518,7 +521,7 @@ class CNSParser(object):
 
         self.append_component(component)
 
-    def postprocess(self, section):
+    def postprocess_section(self, section):
         """\
         Hides sections with no visible children in the model description.
         To be called at the end of the parse() function.
@@ -527,7 +530,7 @@ class CNSParser(object):
 
         for component in section['children']:
             if component['type'] == 'section':
-                postprocess(component)
+                self.postprocess_section(component)
             if (
                     component['type'] in set(['section', 'parameter'])
                     and ('hidden' not in component or not component['hidden'])
@@ -539,8 +542,9 @@ class CNSParser(object):
 
     def call_handlers(self, line):
         """\
-        Tries to call the handler function for the given line.
-        If the function was found and called, returns the name of the matched pattern.
+        Tries to call the pattern handler function for the given line.
+        If the function was found and called, returns the name of the matched pattern
+        (see the self.pattern_handlers definition).
         Returns None otherwise.
         """
         for name, pattern, function in self.pattern_handlers:
@@ -548,26 +552,35 @@ class CNSParser(object):
             if match:
                 if function is not None:
                     # Create an args dictionary based on named capture groups
-                    # in the regex match. Filter out quote captures.
+                    # in the regex match. Filter out quote captures added with re_string().
                     args = dict(
                         (key, value) for (key, value) in match.groupdict().iteritems()
                             if not re.match('^quote\d+$', key)
                     )
-                    args['_line'] = line
+                    args['_line'] = line # Pattern handlers may access the exact line through this argument.
+
                     function(args)
                 return name
         return None
 
     def parse_start(self):
         # These properties are used by pattern handler functions.
+        # They are set on the parser object. This avoids having to pass
+        # parser state around as a parameter to every function.
+
         self.current_attributes = {} # Data type, etc.
-        self.current_paragraph  = {} # Documentation or parameter labels
+        self.current_paragraph  = {} # Documentation paragraphs or parameter labels
         self.current_sections   = [] # Contains pointers to actual section components, used for switching between levels
-        self.accesslevel_names  = [] # Used for inexpensive parameter access level validation
-        self.line_no            = 0
+        self.accesslevel_names  = [] # Used in parameter access level validation
+        self.line_no            = 0  # Current line number in a CNS source file
+
+        self.accesslevels = [] # A list of access levels
+        self.components   = [] # A tree of components found by the parser
 
     def parse_end(self):
-        # Clean up
+        # Clean up. Not necessary, but it's good to leave the parser in its initial state after its done.
+        del self.components
+        del self.accesslevels
         del self.line_no
         del self.accesslevel_names
         del self.current_sections
@@ -579,9 +592,12 @@ class CNSParser(object):
         Loops through the CNS source file and fills in a model description.
         Returns the accesslevels and components structures.
         """
+
+        # Initialize temporary parser state variables.
         self.parse_start()
 
-        # FIXME: Parsing should start after the '- begin block parameter definition -' line
+        # FIXME: Parsing should start after the '- begin block parameter definition -' line.
+        #        The header is currently ignored as unparsable content.
 
         for line in self.source:
             self.line_no += 1
@@ -594,27 +610,72 @@ class CNSParser(object):
                     self.current_paragraph = ''
             else:
                 if len(self.current_paragraph):
+                    # A single empty line can mark the end of a paragraph component.
                     self.save_paragraph(self.current_paragraph)
                     self.current_paragraph = ''
                 continue
 
+        accesslevels = self.accesslevels
+        components   = self.components
+
+        # Clean up parser state.
         self.parse_end()
 
-        for component in self.components:
+        for component in components:
             if component['type'] == 'section':
-                self.postprocess(component)
+                self.postprocess_section(component)
 
-        return self.accesslevels, self.components
+        return accesslevels, components
 
     def write(self, form_data, aux_file_root):
         """\
         Generate a new CNS file based on the supplied CNS source file (used as
-        a template) and a form_data structure which describes filled in parameters.
+        a template) and a form_data structure which describes all instantiated parameters and sections.
         Returns a new CNS file as a list of lines, and a map for renaming auxiliary files.
         """
-        cns          = []
+
+        # (WIP) Mostly complete, except for:
+        #
+        # TODO: Replace repeat-index placeholders. (We already have the required information)
+        # TODO: Do access level checks.
+        # TODO: Fill aux_file_map.
+        #
+        # And a few FIXMEs.
+
+        cns          = [] # The CNS output
         aux_file_map = []
 
+        # First, get the CNS source (file) as an array.
+        # This allows us to seek within the file to deal with repetitions.
+        source_array = [line for line in self.source]
+
+        # Replace the source property since we just exhausted it by looping through it.
+        self.source  = source_array
+
+        # Obtain components and accesslevels by parsing the CNS file.
+        # This seems redundant since we loop through the CNS file a second time
+        # later on, but it simplifies the code.
+        accesslevels, component_tree = self.parse()
+
+        def squash_component_tree(roots):
+            """\
+            Returns a flat list of components.
+            """
+            flat = list()
+            for component in roots:
+                flat.append(component)
+                if component['type'] == 'section':
+                    flat.extend(squash_component_tree(component['children']))
+            return flat
+
+
+        # Component order in this list will match the component_index numbers
+        # supplied in form_data.
+        components = squash_component_tree(component_tree)
+        # Note that this list is different from self.components, which is used
+        # solely by the parser and in pattern handler functions.
+
+        # Initialize parser state variables again.
         self.parse_start()
 
         # Order between attributes and labels in front of parameter lines is not preserved.
@@ -622,56 +683,311 @@ class CNSParser(object):
         current_paragraph_lines = []
         current_attr_lines      = []
 
-        for line in self.source:
-            # TODO Save state and jump back and forth in the file for section repetitions, and start filling things in
+        # The reason we add some properties to the parser object instead of using it as a function-local variable
+        # is that python's scoping issues do not allow for (non-global) variables from an outer scope to be
+        # assigned to in a nested function. We want that flexibility.
+        self.component_index = 0
+
+        section_its = [
+            {
+                # This describes a component container (either a section or the virtual root block).
+                # The first entry, inserted here, describes the root block.
+                'component_index': None, # The root block is not a component.
+                'level':           0,    # Section depth, measured in the amount of equals signs. The root block is at the highest level, 0.
+                'repetitions':     [ form_data['instances'] ], # The root block can be seen as having 1 repetition.
+                'repetition':      0,    # Current section repetition index. Always 0 for the root block.
+                'child_index':     0,    # Index within the current repetition of this section to the current instance.
+                # Note that the above value may not be used to access a child in the
+                # components tree, as the index is not incremented for hidden
+                # child components.
+
+                'parser_state':    None, # Parser state saving is only needed for repeatable sections, the root block is not repeated.
+            }
+        ]
+
+        def on_section_boundary(at_eof=False):
+            """\
+            Called when a new section is opened and at end-of-file.
+            Handles section repetition and section depth traversal.
+
+            The return value indicates whether the encountered section header
+            should be printed at this time.
+            """
+
+            # Actual sections of level 1 can not exist due to the minimum amount
+            # of equals signs for a section enforced by the parser being 2.
+            # A value of 1 basically tells the writer to close or repeat all
+            # component containers except for the virtual root block.
+            new_level = 1 if at_eof else self.current_sections[-1]['level']
+
+            # The current (deepest) section iterator.
+            it = section_its[-1]
+
+            # Are we leaving one or more sections?
+            if new_level <= section_its[-1]['level']:
+
+                # This can only happen at EOF or when we are within a section already.
+                # TODO: Re-check with models that do not use sections.
+                assert at_eof or len(section_its) > 1
+
+                if self.line_no == it['parser_state']['line_no']:
+                    # This indicates that we just jumped back for a repetition.
+                    # Continue without handling the section boundary.
+                    return True
+
+                # Have we entered a new repetition?
+                jumped_for_repetition = False
+
+                # As long as there are sections left to close and we haven't
+                # entered a new repetition...
+                while new_level <= section_its[-1]['level'] and not jumped_for_repetition:
+
+                    if section_its[-1]['repetition'] < len(section_its[-1]['repetitions']) - 1:
+
+                        # Enter a new repetition for this section.
+                        section_its[-1]['repetition'] += 1
+                        section_its[-1]['child_index'] = 0
+
+                        self.printv(
+                            'Jumping from line ' + str(self.line_no)
+                            + ' to '             + str(section_its[-1]['parser_state']['line_no'] - 1)
+                        )
+
+                        # Restore parser state.
+                        self.component_index  = section_its[-1]['component_index']-1
+                        self.line_no          = section_its[-1]['parser_state']['line_no'] - 1
+                        self.current_sections = section_its[-1]['parser_state']['current_sections']
+                        self.components       = section_its[-1]['parser_state']['components']
+
+                        jumped_for_repetition = True
+
+                    else:
+                        # No repetitions left, close the section and move on.
+                        section_its.pop()
+                        section_its[-1]['child_index'] += 1
+
+                if jumped_for_repetition:
+                    # Tell the caller not to print the section header that ends this section yet.
+                    return False
+
+                # Note that parameters can not exist directly after a section end.
+                # After a section end either a section start or an EOF MUST follow.
+
+            if at_eof:
+                # Nothing to do here.
+                return False
+
+            if components[self.component_index]['hidden']:
+                # We shouldn't have to create an iterator for hidden sections. -- TODO: double-check
+                return True
+
+            # The iterator for the parent of the section we are entering.
+            it = section_its[-1]
+
+            assert new_level > section_its[-1]['level']
+
+            if len(it['repetitions']):
+                instance = it['repetitions'][it['repetition']][it['child_index']]
+
+                # FIXME: These should NOT be assertions. Print a regular error message instead.
+                # Checks whether the current component index number matches with the next component number in form_data.
+                assert instance['component_index'] == self.component_index
+                assert components[self.component_index]['type'] == 'section'
+
+            else:
+                # This is a (child of a) section that has zero repetitions.
+                instance = None
+
+            #print(self.line_no, it['child_index'], instance['component_index'], self.component_index)
+
+            component = components[self.component_index]
+
+            if instance is not None:
+                # Check if the repetition count is within the allowed bounds.
+                if component['repeat']:
+                    if (component['repeat_min'] is not None
+                            and len(instance['repetitions']) < component['repeat_min']):
+                        self.error(
+                            'Not enough repetitions for section "'
+                            + component['label'] + '" found, require at least '
+                            + str(component['repeat_min'])
+                        )
+                    elif (component['repeat_max'] is not None
+                            and len(instance['repetitions']) > component['repeat_max']):
+                        self.error(
+                            'Too many repetitions for section "'
+                            + component['label'] + '" found, only '
+                            + str(component['repeat_max']) + ' allowed'
+                        )
+                elif len(instance['repetitions']) != 1:
+                    # Repetition is not allowed, require exactly one value.
+                    self.error(
+                        'Incorrect amount of repetitions for section "'
+                        + component['label'] + '", only one allowed'
+                    )
+
+            # Add a new section iterator.
+            section_its.append({
+                'component_index': self.component_index,
+                'level':           new_level,
+                'repetitions':     instance['repetitions'] if instance is not None else [],
+                'repetition':      0,
+                'child_index':     0,
+                'parser_state': {
+                    # Save the parser's state so we can easily jump back if we need to repeat this section.
+                    'line_no':          self.line_no,
+                    'current_sections': self.current_sections,
+                    'components':       self.components,
+                }
+            })
+
+            # If this section instantiation doesn't have a single repetition, don't print it at all.
+            return (len(section_its[-1]['repetitions']) > 0)
+
+        while True:
+            # If at EOF, close or repeat any open sections.
+            if self.line_no >= len(source_array):
+                on_section_boundary(at_eof=True)
+                # on_section_boundary() may jump to another line number, check again.
+                if self.line_no >= len(source_array):
+                    break
+
+            line          = source_array[self.line_no]
             self.line_no += 1
 
             # TODO: This kills trailing spaces in our output, check if this is a problem.
             line = line.rstrip()
+
             if len(line):
+                # Call pattern handler functions like parse() does.
                 line_type = self.call_handlers(line)
 
+                # Did the parser parse the line succesfully?
                 if line_type is None:
-                    self.warn('Could not parse line "' + line + '"')
+                    # No need to warn about this, we already warned the user in the parse() call above.
                     self.current_paragraph = ''
                     # Output saved paragraph lines even though they're not saved as a component.
                     cns.extend(current_paragraph_lines)
                     current_paragraph_lines = []
                     #cns.append('')
+                    # Add the possibly erroneous input line to the CNS output anyway.
                     cns.append(line)
 
-                elif line_type == 'section_start':
-                    cns.extend(current_attr_lines)
-                    cns.append(line)
-                    current_attr_lines = []
+                elif line_type in set(['section_start', 'parameter']):
+                    # This line defines a component.
 
-                elif line_type == 'parameter':
-                    cns.extend(current_attr_lines)
-                    cns.extend(current_paragraph_lines)
-                    current_paragraph_lines = []
-                    cns.append(line)
-                    current_attr_lines = []
+                    # Attributes describing the current component.
+                    component = components[self.component_index]
+
+                    # The deepest section we're currently in.
+                    it = section_its[-1]
+
+                    if line_type == 'section_start':
+                        if on_section_boundary():
+                            # Never output section attributes.
+                            #cns.extend(current_attr_lines)
+                            cns.append(line)
+
+                        current_attr_lines = []
+
+                        if component['hidden']:
+                            current_paragraph_lines = []
+                            current_attr_lines = []
+
+                            self.component_index += 1
+
+                            # Hidden components are never instantiated or added to form_data; Don't increment that index.
+                            #it['child_index'] += 1
+                            continue
+
+                    elif line_type == 'parameter':
+                        if component['hidden']:
+                            cns.extend(current_attr_lines)
+                            cns.extend(current_paragraph_lines)
+
+                            cns.append(line)
+                            current_paragraph_lines = []
+                            current_attr_lines = []
+
+                            self.component_index += 1
+                            #it['child_index'] += 1
+                            continue
+
+                        else:
+                            # Does our parent section exist at least once?
+                            if len(it['repetitions']):
+                                # Yes. Get this parameter's instance from the current section repetition.
+                                instance = it['repetitions'][it['repetition']][it['child_index']]
+
+                                # Check if the repetition count is within the allowed bounds.
+                                if component['repeat']:
+                                    if (component['repeat_min'] is not None
+                                            and len(instance['repetitions']) < component['repeat_min']):
+                                        self.error(
+                                            'Not enough values for parameter "'
+                                            + component['name'] + '" found, require at least '
+                                            + str(component['repeat_min'])
+                                        )
+                                    elif (component['repeat_max'] is not None
+                                            and len(instance['repetitions']) > component['repeat_max']):
+                                        self.error(
+                                            'Too many values for parameter "'
+                                            + component['name'] + '" found, only '
+                                            + str(component['repeat_max']) + ' allowed'
+                                        )
+                                elif len(instance['repetitions']) != 1:
+                                    # Repetition is not allowed, require exactly one value.
+                                    self.error(
+                                        'Incorrect amount of values for parameter "'
+                                        + component['name'] + '", only one allowed'
+                                    )
+
+                                for repetition in instance['repetitions']:
+                                    cns.extend(current_attr_lines)
+
+                                    label_lines = copy.copy(current_paragraph_lines)
+                                    for label_line in label_lines:
+                                        cns.append(label_line)
+
+                                    # FIXME: Double quotes around the value in the CNS source will be
+                                    #        dropped by this substitution.
+                                    #        Check whether we need to re-add them.
+                                    rep_line = line
+                                    rep_line = re.sub(r'(?<=(?<!\{|=)=)[^;]*?(?=;)', str(repetition), rep_line)
+
+                                    cns.append(rep_line)
+
+                        current_paragraph_lines = []
+                        current_attr_lines = []
+
+                        it['child_index'] += 1
+
+                    self.component_index += 1
+
+                elif line_type == 'paragraph':
+                    # A paragraph can be a component as well, but we don't yet know if this is actually a label.
+                    current_paragraph_lines.append(line)
 
                 elif line_type == 'hash_attributes' or line_type == 'plus_attributes':
                     current_attr_lines.append(line)
 
-                elif line_type == 'paragraph':
-                    current_paragraph_lines.append(line)
-
                 else:
+                    # Comments and other lines that don't need special handling.
                     cns.append(line)
             else:
                 if len(self.current_paragraph):
+                    # A single empty line can mark the end of a paragraph component.
                     cns.extend(current_paragraph_lines)
                     current_paragraph_lines = []
                     self.save_paragraph(self.current_paragraph)
                     self.current_paragraph = ''
+                    self.component_index += 1
 
                 cns.append('')
                 continue
 
-        self.parse_end()
+        del self.component_index
 
-        # TODO: Fill aux_file_map
+        self.parse_end()
 
         return cns, aux_file_map

@@ -111,4 +111,4 @@ for file in data['files']:
             print('Removing ' + os.path.join(job_dir, file['name']))
             #os.remove(file['name'])
 
-cns_output.write('\n'.join(cns))
+cns_output.write('\n'.join(cns) + '\n')
