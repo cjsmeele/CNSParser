@@ -596,8 +596,17 @@ class CNSParser(object):
         # Initialize temporary parser state variables.
         self.parse_start()
 
-        # FIXME: Parsing should start after the '- begin block parameter definition -' line.
-        #        The header is currently ignored as unparsable content.
+        # Skip until the start of the block parameter definition.
+        found_parameter_block = False
+
+        for line in self.source:
+            self.line_no += 1
+            if re.search('- begin block parameter definition -', line) is not None:
+                found_parameter_block = True
+                break
+
+        if not found_parameter_block:
+            self.error('Could not find the start of the block parameter definition')
 
         for line in self.source:
             self.line_no += 1
@@ -677,6 +686,20 @@ class CNSParser(object):
 
         # Initialize parser state variables again.
         self.parse_start()
+
+        # Skip until the start of the block parameter definition.
+        found_parameter_block = False
+
+        for line in source_array:
+            self.line_no += 1
+            line = line.rstrip()
+            cns.append(line)
+            if re.search('- begin block parameter definition -', line) is not None:
+                found_parameter_block = True
+                break
+
+        # This error should have been catched by the parse() call above.
+        assert found_parameter_block
 
         # Order between attributes and labels in front of parameter lines is not preserved.
         # Attributes always come before the label in our output. This shouldn't have any consequences.
