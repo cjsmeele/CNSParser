@@ -643,16 +643,10 @@ class CNSParser(object):
         Returns a new CNS file as a list of lines, and a map for renaming auxiliary files.
         """
 
-        # (WIP) Mostly complete, except for:
-        #
-        # TODO: Replace repeat-index placeholders. (We already have the required information)
         # TODO: Do access level checks.
-        # TODO: Fill aux_file_map.
-        #
-        # And a few FIXMEs.
 
         cns          = [] # The CNS output
-        aux_file_map = []
+        aux_file_map = dict()
 
         # First, get the CNS source (file) as an array.
         # This allows us to seek within the file to deal with repetitions.
@@ -727,6 +721,10 @@ class CNSParser(object):
                 'parser_state':    None, # Parser state saving is only needed for repeatable sections, the root block is not repeated.
             }
         ]
+
+        # Instances of file parameters are added to this dictionary for mapping them with formdata['files'].
+        file_parameter_instances = dict()
+
 
         def replace_repetition_placeholders(string, parameter_component_index=None, parameter_repetition=None, zero_based=False):
             """\
@@ -957,6 +955,7 @@ class CNSParser(object):
                             cns.extend(current_attr_lines)
                             cns.extend(current_paragraph_lines)
 
+                            # Fill in repetition placeholders in the parameter name.
                             new_line = re.sub(
                                 r'(?<=\{===>\})\s*([a-zA-Z0-9_]+)(?==[^;]*?;)',
                                 lambda match: ' ' + replace_repetition_placeholders(match.group(1)),
@@ -987,7 +986,7 @@ class CNSParser(object):
                                     )
 
                                 # This would indicate a bug in the parser.
-                                assert components[self.component_index]['type'] == 'parameter'
+                                assert component['type'] == 'parameter'
 
                                 # Check if the repetition count is within the allowed bounds.
                                 if component['repeat']:
@@ -1012,9 +1011,43 @@ class CNSParser(object):
                                         + component['name'] + '", only one allowed'
                                     )
 
+                                if str(self.component_index) not in file_parameter_instances:
+                                    file_parameter_instances[str(self.component_index)] = []
+
+                                if component['datatype'] == 'file':
+                                    this_file_parameter_repetitions = []
+                                    file_parameter_instances[str(self.component_index)].append(this_file_parameter_repetitions)
+                                    local_instance_index = len(file_parameter_instances[str(self.component_index)]) - 1
+
                                 for repetition_index, repetition in enumerate(instance['repetitions']):
                                     cns.extend(current_attr_lines)
                                     cns.extend(current_paragraph_lines)
+
+                                    # Parameter is a file, add it to the file_map if a file exists.
+                                    if component['datatype'] == 'file':
+                                        if (str(self.component_index) in form_data['files']
+                                                and str(local_instance_index) in form_data['files'][str(self.component_index)]
+                                                and str(repetition_index) in form_data['files'][str(self.component_index)][str(local_instance_index)]):
+
+                                            filename_original = form_data['files'][str(self.component_index)][str(local_instance_index)][str(repetition_index)]['name']
+
+                                            # An uploaded file exists for this file parameter component.
+                                            # This repetition field must contain the filename as provided by the user.
+                                            # We do not use it however.
+                                            assert len(repetition)
+
+                                            filename_new = (
+                                                replace_repetition_placeholders(component['name'], self.component_index, repetition_index)
+                                                    if component['repeat']
+                                                    else replace_repetition_placeholders(component['name'])
+                                            )
+
+                                            # Grab desired extension from the component's default value.
+                                            match = re.search(r'\.(.*)$', component['default'])
+                                            if match is not None:
+                                                filename_new += '.' + match.group(1)
+
+                                            aux_file_map[filename_original] = filename_new
 
                                     new_line = line
 

@@ -92,23 +92,26 @@ parser = CNSParser(
 cns, file_map = parser.write(data, job_dir)
 
 # Rename auxiliary files.
-for file in data['files']:
-    # NOTE: We assume that the data['files'] list was filtered or
-    #       generated securely by the form server.
-    # TODO: It would be better to pass file information to CNSParser separate
-    #       from other form data to avoid having to modify the form data as
-    #       uploaded by the client.
+for component in data['files'].itervalues():
+    for instance in component.itervalues():
+        for file in instance.itervalues():
+            # NOTE: We assume that the data['files'] list was filtered or
+            #       generated securely by the form server.
+            # TODO: It would be better to pass file information to CNSParser separate
+            #       from other form data to avoid having to modify the form data as
+            #       uploaded by the client.
 
-    if args.keep_files:
-        if file['name'] in file_map:
-            print('Linking ' + file_map[file['name']] + ' -> ' + os.path.join(job_dir, file['name']))
-            #os.link(os.path.join(job_dir, file['name']), os.path.join(job_dir, file_map[file['name']]))
-    else:
-        if file['name'] in file_map:
-            print('Moving ' + os.path.join(job_dir, file['name']) + ' -> ' + file_map[file['name']])
-            #os.rename(os.path.join(job_dir, file['name']), os.path.join(job_dir, file_map[file['name']]))
-        else:
-            print('Removing ' + os.path.join(job_dir, file['name']))
-            #os.remove(file['name'])
+            if args.keep_files:
+                if file['name'] in file_map:
+                    print('Linking ' + file_map[file['name']] + ' -> ' + os.path.join(job_dir, file['name']))
+                    # Create a hard link.
+                    os.link(os.path.join(job_dir, file['name']), os.path.join(job_dir, file_map[file['name']]))
+            else:
+                if file['name'] in file_map:
+                    print('Moving ' + os.path.join(job_dir, file['name']) + ' -> ' + file_map[file['name']])
+                    os.rename(os.path.join(job_dir, file['name']), os.path.join(job_dir, file_map[file['name']]))
+                else:
+                    print('Removing ' + os.path.join(job_dir, file['name']))
+                    os.remove(file['name'])
 
 cns_output.write('\n'.join(cns) + '\n')

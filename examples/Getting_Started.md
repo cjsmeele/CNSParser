@@ -1,7 +1,7 @@
 Getting Started
 ===============
 
-*This guide assumes you're using [HADDOCK-WebUI](https://github.com/csmeele/HADDOCK-WebUI) as your form frontend*.
+*This guide assumes you're using [HADDOCK-WebUI](https://github.com/cjsmeele/HADDOCK-WebUI) as your form frontend*.
 
 CNSParser consists of two scripts and one module.
 
