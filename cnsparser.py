@@ -257,6 +257,10 @@ class CNSParser(object):
         for key, value in self.current_attributes.items():
             if key in set(['repeat', 'repeat_index', 'repeat_min', 'repeat_max']):
                 component[key] = value
+            if key == 'custom_attributes':
+                for key, value in value.items():
+                    assert key not in component # This would indicate that a reserved word is used as an attr name.
+                    component[key] = value
 
         if 'repeat' in component and component['repeat']:
             if 'repeat_index' not in component:
@@ -462,8 +466,11 @@ class CNSParser(object):
             elif key == 'type':
                 self.current_attributes.update({ 'datatype': value })
             else:
-                self.warn('Unknown hash_attributes key "' + key + '"')
-                # TODO: Add it to current_attributes anyway.
+                self.warn('Unknown hash_attributes key "' + key + '" saved as custom attribute')
+                # Add it to current_attributes anyway.
+                if 'custom_attributes' not in self.current_attributes:
+                    self.current_attributes['custom_attributes'] = dict()
+                self.current_attributes['custom_attributes'].update({ key: value })
 
     def handle_plus_attributes(self, args):
         # The only known uses for this attribute format are choice and table definitions.
