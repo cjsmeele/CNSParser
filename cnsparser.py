@@ -650,8 +650,6 @@ class CNSParser(object):
         Returns a new CNS file as a list of lines, and a map for renaming auxiliary files.
         """
 
-        # TODO: Do access level checks.
-
         cns          = [] # The CNS output
         aux_file_map = dict()
 
@@ -718,6 +716,7 @@ class CNSParser(object):
                 # The first entry, inserted here, describes the root block.
                 'component_index': None, # The root block is not a component.
                 'level':           0,    # Section depth, measured in the amount of equals signs. The root block is at the highest level, 0.
+                'has_access':      True, # All access levels have access to the root block.
                 'repetitions':     [ form_data['instances'] ], # The root block can be seen as having 1 repetition.
                 'repetition':      0,    # Current section repetition index. Always 0 for the root block.
                 'child_index':     0,    # Index within the current repetition of this section to the current instance.
@@ -882,10 +881,18 @@ class CNSParser(object):
                         + component['label'] + '", only one allowed'
                     )
 
+            # If False, the submitted form level does not have access to this section.
+            # Use the default amount of repetitions and use default values for everything.
+            has_access_to_this_section = (
+                it['has_access']
+                and form_data['level'] in component['accesslevels']
+            )
+
             # Add a new section iterator.
             section_its.append({
                 'component_index': self.component_index,
                 'level':           new_level,
+                'has_access':      has_access_to_this_section,
                 'repetitions':     instance['repetitions'] if instance is not None else [],
                 'repetition':      0,
                 'child_index':     0,
@@ -1018,6 +1025,15 @@ class CNSParser(object):
                                         + component['name'] + '", only one allowed'
                                     )
 
+
+                                # If False, the submitted form level does not have access to this parameter.
+                                # Use the default amount of repetitions and use default values for everything.
+                                has_access_to_this_parameter = (
+                                    it['has_access']
+                                    and form_data['level'] in component['accesslevels']
+                                )
+
+
                                 if str(self.component_index) not in file_parameter_instances:
                                     file_parameter_instances[str(self.component_index)] = []
 
@@ -1026,12 +1042,22 @@ class CNSParser(object):
                                     file_parameter_instances[str(self.component_index)].append(this_file_parameter_repetitions)
                                     local_instance_index = len(file_parameter_instances[str(self.component_index)]) - 1
 
-                                for repetition_index, repetition in enumerate(instance['repetitions']):
+                                # Use minimum repetition count if the submitted form has no access to this parameter.
+                                repetitions = (
+                                    instance['repetitions']
+                                        if has_access_to_this_parameter
+                                        else
+                                            [None] * component['repeat_min']
+                                                if component['repeat']
+                                                else [None] * 1
+                                )
+
+                                for repetition_index, repetition in enumerate(repetitions):
                                     cns.extend(current_attr_lines)
                                     cns.extend(current_paragraph_lines)
 
                                     # Parameter is a file, add it to the file_map if a file exists.
-                                    if component['datatype'] == 'file':
+                                    if component['datatype'] == 'file' and has_access_to_this_parameter:
                                         if (str(self.component_index) in form_data['files']
                                                 and str(local_instance_index) in form_data['files'][str(self.component_index)]
                                                 and str(repetition_index) in form_data['files'][str(self.component_index)][str(local_instance_index)]):
@@ -1045,7 +1071,7 @@ class CNSParser(object):
 
                                             filename_new = (
                                                 replace_repetition_placeholders(component['name'], self.component_index, repetition_index)
-                                                    if component['repeat']
+                                                    if   component['repeat']
                                                     else replace_repetition_placeholders(component['name'])
                                             )
 
@@ -1058,7 +1084,15 @@ class CNSParser(object):
 
                                     new_line = line
 
-                                    # FIXME: Check datatypes.
+                                    if repetition is None:
+                                        # No access, minimum amount of repetitions.
+                                        repetition = (
+                                            replace_repetition_placeholders(component['default'], self.component_index, repetition_index)
+                                                if   component['repeat']
+                                                else replace_repetition_placeholders(component['default'])
+                                        )
+
+                                    # TODO: Check datatypes.
 
                                     # Is the parameter value in the template enclosed by quotes?
                                     if re.search(r'(?<=(?<!\{|=)=)(["' + '\'' + r'])[^;]*?\1(?=;)', new_line) is not None:
