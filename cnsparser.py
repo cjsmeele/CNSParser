@@ -1092,14 +1092,21 @@ class CNSParser(object):
                                                 else replace_repetition_placeholders(component['default'])
                                         )
 
-                                    # TODO: Check datatypes.
+                                    # Escape special characters.
+
+                                    # Python has some issues with backslashes in regular expressions.
+                                    # The following converts single backslashes (\) into escaped backslashes (\\).
+                                    repetition = re.sub(r'\\', r'\\\\\\\\', repetition)
+
+                                    # Escape double quotes
+                                    repetition = re.sub(r'"',  r'\"',  repetition)
 
                                     # Is the parameter value in the template enclosed by quotes?
                                     if re.search(r'(?<=(?<!\{|=)=)(["' + '\'' + r'])[^;]*?\1(?=;)', new_line) is not None:
                                         # Always output double quotes.
-                                        new_line = re.sub(r'(?<=(?<!\{|=)=)[^;]*?(?=;)', '"' + str(repetition) + '"', new_line)
+                                        new_line = re.sub(r'(?<=(?<!\{|=)=)[^;]*?(?=;)', '"' + repetition + '"', new_line)
                                     else:
-                                        new_line = re.sub(r'(?<=(?<!\{|=)=)[^;]*?(?=;)', str(repetition), new_line)
+                                        new_line = re.sub(r'(?<=(?<!\{|=)=)[^;]*?(?=;)', repetition, new_line)
 
                                     new_line = re.sub(
                                         r'(?<=\{===>\})\s*([a-zA-Z0-9_]+)(?==[^;]*?;)',
