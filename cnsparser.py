@@ -1062,12 +1062,9 @@ class CNSParser(object):
                                                 and str(local_instance_index) in form_data['files'][str(self.component_index)]
                                                 and str(repetition_index) in form_data['files'][str(self.component_index)][str(local_instance_index)]):
 
-                                            filename_original = form_data['files'][str(self.component_index)][str(local_instance_index)][str(repetition_index)]['name']
-
                                             # An uploaded file exists for this file parameter component.
-                                            # This repetition field must contain the filename as provided by the user.
-                                            # We do not use it however.
-                                            assert len(repetition)
+
+                                            filename_original = form_data['files'][str(self.component_index)][str(local_instance_index)][str(repetition_index)]['name']
 
                                             filename_new = (
                                                 replace_repetition_placeholders(component['name'], self.component_index, repetition_index)
@@ -1075,12 +1072,20 @@ class CNSParser(object):
                                                     else replace_repetition_placeholders(component['name'])
                                             )
 
-                                            # Grab desired extension from the component's default value.
+                                            # Grab the desired extension from the component's default value.
                                             match = re.search(r'\.(.*)$', component['default'])
                                             if match is not None:
                                                 filename_new += '.' + match.group(1)
 
                                             aux_file_map[filename_original] = filename_new
+
+                                            # This repetition field must contain the filename as provided by the user
+                                            # (and may be prefixed with C:\fakepath\ by a web browser).
+                                            # We do not use it however.
+                                            assert len(repetition)
+
+                                            # Instead we replace the value with the actual name the file will have after the rename.
+                                            repetition = filename_new
 
                                     new_line = line
 
